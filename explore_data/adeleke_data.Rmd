@@ -1,0 +1,163 @@
+---
+title: "Quick look at Dr. Adeleke's 2022 Study data"
+date: "`r Sys.Date()`"
+author: Erin Stearns
+output:
+  rmdformats::downcute:
+    code_folding: show
+    self_contained: true
+    thumbnails: false
+    lightbox: true
+pkgdown:
+  as_is: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, include=FALSE}
+#load packages
+pacman::p_load(tidyverse, data.table, gfckanr,
+               sf, rgdal, htmltools,
+               plotly, knitr, DT, scales, kable, kableExtra,
+               leaflet, leaflet.extras, tmap)
+#set data directory
+data_dir <- Sys.getenv("epimap_spatial")
+```
+
+```{r, include=FALSE}
+#define data
+url <- "https://dataexchange.gatesfoundation.org/dataset/ab6e7398-23cc-4aea-8a2c-a03e185de9e7/resource/8947389f-cb50-4a08-b8fd-6775d90281a4/download"
+
+#load data
+path <- ckan_fetch(url, store = "disk", path = tempfile())
+df <- read.csv(file = path$path, header = TRUE, stringsAsFactors = F)
+
+# ---- quick data prep
+
+#take a look at test rows
+df_test_sites <- df %>%
+  filter(username %in% c("test","state_1", "training_user"))
+
+#remove test rows
+df_sans_test <- df %>%
+  filter(!username %in% c("test", "state_1", "training_user"))
+
+#separate community coordinates
+df_w_coords <- df_sans_test %>%
+  separate(r_GPSCommunity, sep = " ", c("latitude", "longitude", "elevation", "precision")) %>%
+  #remove rows missing community coords
+  filter(!is.na(longitude)) %>%
+  #make new col that represents 'evidence of adult' in binary numeric form
+  mutate(fly_presence = ifelse(r_EvidenceOfAdult == "yes", 1, ifelse(r_EvidenceOfAdult == "no", 0,
+                                                                     -999))
+         )
+
+#make lat and long numeric
+df_w_coords$latitude <- as.numeric(df_w_coords$latitude)
+df_w_coords$longitude <- as.numeric(df_w_coords$longitude)
+
+#load boundaries
+adm1 <- st_read(paste0(data_dir, "/boundaries/nga/GRID3/NGA_adm1_State_Boundaries.shp"))
+
+adm2 <- st_read(paste0(data_dir, "/boundaries/nga/GRID3/NGA_adm2_Local_Government_Area_Boundaries.shp"))
+```
+
+# Quick glance
+
+Dr. Adeleke's study data can be found on the [GDx here.](https://dataexchange.gatesfoundation.org/dataset/ab6e7398-23cc-4aea-8a2c-a03e185de9e7/resource/8947389f-cb50-4a08-b8fd-6775d90281a4)
+
+```{r, echo=FALSE}
+
+pal <- colorFactor(c("green", "red"), domain = c("1", "0"))
+labels <- sprintf(
+  "<b>%s</b><br>%s<br>%s<br>%s",
+  as.character(df_w_coords$r_State),
+  paste0("LGA: ", as.character(df_w_coords$r_LGA)),
+  paste0("Community name: ", as.character(df_w_coords$r_CommunityName)),
+  paste0("Flies present? ", as.character(df_w_coords$r_EvidenceOfAdult))
+) %>% lapply(htmltools::HTML)
+
+leaflet(adm1) %>%
+  addTiles() %>%
+  addPolygons(fillOpacity = 0, 
+              weight = 2,
+              color = "grey") %>%
+  addPolygons(data = adm2, 
+              fillOpacity = 0,
+              weight = 1,
+              color = "grey",
+              dashArray = "3") %>%
+  #add sites - colored by evidence of adult flies
+  addCircleMarkers(
+    data = df_w_coords, ~df_w_coords$longitude, ~df_w_coords$latitude, 
+    color = ~pal(df_w_coords$fly_presence), fillOpacity = 0.5,
+    label = labels,
+    labelOptions = labelOptions(noHide = FALSE, #textOnly = TRUE, 
+                                tyle = list(
+                                  "font-weight" = "normal", 
+                                  padding = "3px 8px",
+                                  "color" = "black"),
+                                textsize = "12px",
+                                direction = "auto",
+                                offset = c(0,-15)),
+    radius = 4
+  ) %>%
+  addLegend(
+    "bottomright", pal = pal, 
+    values = df_w_coords$fly_presence, 
+    title = "Fly presence",
+    opacity = 0.9
+  )
+
+```
+
+
+
+# Summary of data by state
+
+```{r, echo=FALSE, results='asis'}
+#simplify table
+df_simple <- df_w_coords %>%
+  select(r_State, r_LGA, r_CommunityName,  r_EvidenceOfAdult, latitude, longitude, r_RiverName, r_RiverBasin, r_Date, r_GPS_river_basin, r_EvidenceOfLarvae, r_SiteSuitable, r_LarvaeRate, r_AdultRate)
+
+#summarize by state
+df_state <- df_simple %>%
+  group_by(r_State) %>%
+  summarise(sites = n())
+
+kable(df_state, col.names = c("State", "Sites")) %>%
+  kable_paper () %>%
+  scroll_box(height = "300px")
+
+```
+
+# Data processing
+
+Starting dataset dimensions: `r nrow(df)` rows, `r ncol(df)` columns
+
+1. Remove 'test' rows
+    + username = test, training_user, or state_1
+    + Data dimensions after removing 'test' rows: `r nrow(df_sans_test)` rows
+2. Prepare community coordinate data 
+    + Currently a string of 4 values (lat, long, elevation, & precision), so split that into 4 individual fields
+    + Transform fields to numeric fields (formerly character)
+    + Remove rows missing lat/long for communities (20 rows)
+    + Data dimensions after removing missing coordinates: `r nrow(df_w_coords)` rows
+
+# Questions for Dr. Adeleke
+
++ There are 2 fields with coordinates: `r_GPSCommunity` & `r_GPS_river_basin` - were the coordinates from the `r_GPSCommunity` from the actual fly collection site or are these village centroids?
+
++ Why are some rows missing community coordinates?
+
+
+# Questions for Dimagi
+
++ Could Dimagi please filter out 'test' rows prior to posting data?
+    + Is there a consistent flag depicting a 'test row'? 
+
+
+
+
