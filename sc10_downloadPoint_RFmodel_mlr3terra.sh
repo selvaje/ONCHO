@@ -93,7 +93,7 @@ s.mod.rfP = capture.output(mod.rfP)
 write.table(s.mod.rfP, paste0("../vector_seed",seed,"/allVarP.mod.rf.txt"), quote = FALSE , row.names = FALSE )
 
 write.table(impR.s, paste0("../vector_seed",seed,"/importanceR_allVar.txt"), quote = FALSE  )
-s.mod.rfP = capture.output(mod.rfR)
+s.mod.rfR = capture.output(mod.rfR)
 write.table(s.mod.rfR, paste0("../vector_seed",seed,"/allVarR.mod.rf.txt"), quote = FALSE , row.names = FALSE )
 
 save.image(paste0("../vector_seed",seed,"/data0.RData"))
@@ -146,13 +146,13 @@ backend = as_data_backend(table)    # this is just table for the learner
 task = as_task_classif(backend, target = "pa")
 print(task)
 
-learnerP = lrn("classif.ranger" , predict_type = "prob" )    ### https://mlr3extralearners.mlr-org.com/articles/learners/list_learners.html 
+learnerP = lrn("classif.ranger" , predict_type = "prob" , importance = "permutation"  )    ### https://mlr3extralearners.mlr-org.com/articles/learners/list_learners.html 
 learnerP$parallel_predict = TRUE  
 print(learnerP)
 learnerP$train(task)  # usefull to obtain the $model
 learnerP$model
 
-learnerR = lrn("classif.ranger" , predict_type = "response" )    ### https://mlr3extralearners.mlr-org.com/articles/learners/list_learners.html 
+learnerR = lrn("classif.ranger" , predict_type = "response" , importance = "permutation"  )    ### https://mlr3extralearners.mlr-org.com/articles/learners/list_learners.html 
 learnerR$parallel_predict = TRUE  
 print(learnerR)
 learnerR$train(task)
@@ -164,10 +164,13 @@ pred.error =  learnerR$model$prediction.error
 write.table(pred.error , paste0("../vector_seed",seed,"/pred_error.txt"))
 write.table(conf.matrix, paste0("../vector_seed",seed,"/conf_matrix.txt"))
 
+write.table(capture.output(learnerR$model), paste0("../vector_seed",seed,"/selVarR.mod.rf.txt"), quote = FALSE , row.names = FALSE )
+write.table(capture.output(learnerP$model), paste0("../vector_seed",seed,"/selVarP.mod.rf.txt"), quote = FALSE , row.names = FALSE )
+
 save.image(paste0("../vector_seed",seed,"/data1.RData"))
 '
 else 
- sleep 3000 
+sleep 1000 
 fi ### close the first array loop 
 
 module purge
