@@ -114,6 +114,55 @@ gdal_edit.py -a_nodata 0 $ONCHO/input/soilgrids/soilgrids_msk.tif
 # alternative https://ghsl.jrc.ec.europa.eu/download.php?ds=pop 
 
 # https://data.grid3.org/maps/GRID3::grid3-nigeria-gridded-population-estimates-version-2-0/about 
-cd /gpfs/loomis/project/sbsc/ga254/dataproces/ONCHO/input/population 
-wget https://wopr.worldpop.org/download/495
-unzip 495
+# cd /gpfs/loomis/project/sbsc/ga254/dataproces/ONCHO/input/population 
+# wget https://wopr.worldpop.org/download/495
+# unzip 495
+
+POP=/gpfs/gibbs/project/sbsc/ga254/dataproces/ONCHO/input/population
+# https://ghsl.jrc.ec.europa.eu/download.php?ds=pop
+
+wget https://jeodpp.jrc.ec.europa.eu/ftp/jrc-opendata/GHSL/GHS_POP_GLOBE_R2022A/GHS_POP_E2020_GLOBE_R2022A_54009_100/V1-0/tiles/GHS_POP_E2020_GLOBE_R2022A_54009_100_V1_0_R9_C19.zip
+wget https://jeodpp.jrc.ec.europa.eu/ftp/jrc-opendata/GHSL/GHS_POP_GLOBE_R2022A/GHS_POP_E2020_GLOBE_R2022A_54009_100/V1-0/tiles/GHS_POP_E2020_GLOBE_R2022A_54009_100_V1_0_R8_C19.zip
+wget https://jeodpp.jrc.ec.europa.eu/ftp/jrc-opendata/GHSL/GHS_POP_GLOBE_R2022A/GHS_POP_E2020_GLOBE_R2022A_54009_100/V1-0/tiles/GHS_POP_E2020_GLOBE_R2022A_54009_100_V1_0_R8_C20.zip
+wget https://jeodpp.jrc.ec.europa.eu/ftp/jrc-opendata/GHSL/GHS_POP_GLOBE_R2022A/GHS_POP_E2020_GLOBE_R2022A_54009_100/V1-0/tiles/GHS_POP_E2020_GLOBE_R2022A_54009_100_V1_0_R8_C19.zip
+
+unzip GHS_POP_E2020_GLOBE_R2022A_54009_100_V1_0_R8_C19.zip  
+unzip GHS_POP_E2020_GLOBE_R2022A_54009_100_V1_0_R8_C20.zip  
+unzip GHS_POP_E2020_GLOBE_R2022A_54009_100_V1_0_R9_C19.zip
+unzip GHS_POP_E2020_GLOBE_R2022A_54009_100_V1_0_R9_C20.zip
+
+
+gdalbuildvrt -overwrite $POP/pop_100m.vrt  $POP/GHS_POP_E2020_GLOBE_R2022A_54009_100_V1_0_*.tif
+
+gdalwarp -overwrite -ot Int16  -te $(getCorners4Gwarp $POP/../geomorpho90m/elevation.tif ) -t_srs EPSG:4326 -tr 0.00083333333333333 0.00083333333333333 -r bilinear  -co COMPRESS=DEFLATE -co ZLEVEL=9 $POP/pop_100m.vrt $POP/GHSpop_90m.tif
+gdal_edit.py -a_nodata -9999 $POP/GHSpop_90m.tif   
+
+# pksetmask -co COMPRESS=DEFLATE -co ZLEVEL=9 -m /tmp/$(basename $DIR _tiles20d).tif -msknodata -9999  -nodata 0 -i  /tmp/$(basename $DIR _tiles20d).tif   -o $ONCHO/input/hydrography90m/$(basename $DIR _tiles20d).tif 
+
+
+### livestock fatto il download a mano https://dataverse.harvard.edu/dataverse/glw_3
+
+
+LS=/gpfs/gibbs/project/sbsc/ga254/dataproces/ONCHO/input/livestock
+for file in $LS/5_??_2010_Da.tif  ; do 
+gdal_translate -ot Int32  -projwin  $(getCorners4Gtranslate  $LS/../geomorpho90m/elevation.tif )  -tr 0.00083333333333333 0.00083333333333333 -r bilinear  -co COMPRESS=DEFLATE -co ZLEVEL=9 $file  $LS/$(basename $file .tif )_90m.tif 
+pksetmask -co COMPRESS=DEFLATE -co ZLEVEL=9 -m $LS/../geomorpho90m/elevation.tif -msknodata -9999 -nodata -9999 \
+                                            -m $LS/$(basename $file .tif )_90m.tif  -msknodata -0.5 -p "<"  -nodata -9999 \
+-i $LS/$(basename $file .tif )_90m.tif -o $LS/$(basename $file .tif )_90m_msk.tif
+gdal_edit.py  -a_nodata -32768 $LS/$(basename $file .tif )_90m_msk.tif  # faeka the nodata
+done 
+mv 5_Bf_2010_Da_90m_msk.tif    LS_Bf.tif  # romeve it ... only 0
+mv 5_Ch_2010_Da_90m_msk.tif    LS_Ch.tif
+mv 5_Ct_2010_Da_90m_msk.tif    LS_Ct.tif
+mv 5_Dk_2010_Da_90m_msk.tif    LS_Dk.tif
+mv 5_Gt_2010_Da_90m_msk.tif    LS_Gt.tif
+mv 5_Ho_2010_Da_90m_msk.tif    LS_Ho.tif
+mv 5_Pg_2010_Da_90m_msk.tif    LS_Pg.tif
+mv 5_Sh_2010_Da_90m_msk.tif    LS_Sh.tif
+
+
+#  wget https://files.worldwildlife.org/wwfcmsprod/files/Publication/file/6kcchn7e3u_official_teow.zip 
+
+ER=/gpfs/gibbs/project/sbsc/ga254/dataproces/ONCHO/input/ecoregions
+gdal_rasterize   -ot Byte   -te  $(getCorners4Gwarp   $ER/../geomorpho90m/elevation.tif )  -l "wwf_terr_ecos"  -a "G200_NUM"   -tr 0.0083333333333333 0.0083333333333333  -co COMPRESS=DEFLATE -co ZLEVEL=9  $ER/official/wwf_terr_ecos.shp  $ER/wwf_terr_ecosG200_NUM.tif 
+
