@@ -161,8 +161,33 @@ mv 5_Pg_2010_Da_90m_msk.tif    LS_Pg.tif
 mv 5_Sh_2010_Da_90m_msk.tif    LS_Sh.tif
 
 
-#  wget https://files.worldwildlife.org/wwfcmsprod/files/Publication/file/6kcchn7e3u_official_teow.zip 
-
+#  wget https://files.worldwildlife.org/wwfcmsprod/files/Publication/file/6kcchn7e3u_official_teow.zip # just few classis ... not useful 
 ER=/gpfs/gibbs/project/sbsc/ga254/dataproces/ONCHO/input/ecoregions
-gdal_rasterize   -ot Byte   -te  $(getCorners4Gwarp   $ER/../geomorpho90m/elevation.tif )  -l "wwf_terr_ecos"  -a "G200_NUM"   -tr 0.0083333333333333 0.0083333333333333  -co COMPRESS=DEFLATE -co ZLEVEL=9  $ER/official/wwf_terr_ecos.shp  $ER/wwf_terr_ecosG200_NUM.tif 
+# gdal_rasterize   -ot Byte   -te  $(getCorners4Gwarp   $ER/../geomorpho90m/elevation.tif )  -l "wwf_terr_ecos"  -a "G200_NUM"   -tr 0.0083333333333333 0.0083333333333333  -co COMPRESS=DEFLATE -co ZLEVEL=9  $ER/official/wwf_terr_ecos.shp  $ER/wwf_terr_ecosG200_NUM.tif 
+
+# https://ecoregions.appspot.com/ https://academic.oup.com/bioscience/article/67/6/534/3102935 
+# wget https://storage.googleapis.com/teow2016/Ecoregions2017.zip
+
+unzip Ecoregions2017.zip
+
+gdal_rasterize   -ot UInt16 -a_nodata 65535   -te  $(getCorners4Gwarp   $ER/../geomorpho90m/elevation.tif )  -l "Ecoregions2017"  -a "ECO_ID"   -tr 0.0083333333333333 0.0083333333333333  -co COMPRESS=DEFLATE -co ZLEVEL=9  $ER/Ecoregions2017.shp  $ER/Ecoregions2017.tif 
+
+##### landcover 
+### wget https://lulctimeseries.blob.core.windows.net/lulctimeseriespublic/lc2021/lulc2021.zip
+
+
+LC=/gpfs/gibbs/project/sbsc/ga254/dataproces/ONCHO/input_orig/landcover
+unzip 
+
+for zone in 33N 33P 31N 31P 32N 32P ; do
+gdalwarp -overwrite    -co COMPRESS=DEFLATE -co ZLEVEL=9  -r near   -t_srs EPSG:4326  -tr  0.000083333333333333333333333 0.000083333333333333333333333 $LC/lc2021/${zone}_20210101-20220101.tif $LC/${zone}_wgs84.tif 
+done 
+
+gdalbuildvrt -overwrite    $LC/lc2021_wgs84.vrt  $LC/???_wgs84.tif
+
+gdal_translate -projwin $(getCorners4Gtranslate $LC/../geomorpho90m/elevation.tif)  -co COMPRESS=DEFLATE -co ZLEVEL=9 $LC/lc2021_wgs84.vrt    $LC/../../input/landcover/lc2021_wgs84.tif  # run it 
+
+gdal_translate -projwin $(getCorners4Gtranslate $LC/../geomorpho90m/elevation.tif) -tr  0.00083333333333333333333333 0.0008333333\
+3333333333333333 -r mode     -co COMPRESS=DEFLATE -co ZLEVEL=9  $LC/lc2021_wgs84.vrt   $LC/../../input/landcover/lc2021_wgs84_r.tif 
+
 

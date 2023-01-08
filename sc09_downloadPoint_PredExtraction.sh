@@ -31,7 +31,7 @@ echo "x y pa" > $ONCHO/vector/NigeriaHabitatSites_x_y_pa.txt
 awk -F "," '{ gsub("\"","") ; if (NR>1) { if ($5=="Yes")
                                                        print $4 , $3 , 1 
                                                        else 
-                                                       print $4 , $3 , 0 }}' $ONCHO/vector/clean_data_nigeria_project_unix.csv   >> $ONCHO/vector/NigeriaHabitatSites_x_y_pa.txt
+              print $4 , $3 , 0 }}' $ONCHO/vector/clean_data_nigeria_project_unix.csv   >> $ONCHO/vector/NigeriaHabitatSites_x_y_pa.txt
 
                         # remove point in the sea > 4.2 
 awk -F , '{if(NR>1 &&  $(NF-4) > 4.2 ) print $(NF-5)  , $(NF-4) , 1 }'   $ONCHO/vector/ecoregions_adaleke.csv | grep -v "0 0 1" | grep -v "3.05555555555556" >> $ONCHO/vector/NigeriaHabitatSites_x_y_pa.txt
@@ -40,7 +40,7 @@ awk -F , '{if ($8=="Present") {PA=1} else {PA=0}  ;  if(NR>1) print $5  , $4 , P
 
 awk  '{ if (NR>1) print $1 , $2 }'      $ONCHO/vector/NigeriaHabitatSites_x_y_pa.txt   >  $ONCHO/vector/NigeriaHabitatSites_x_y.txt
 
-awk  '{ if (NR>1) print $1 , $2 , $3 }'      $ONCHO/vector/NigeriaHabitatSites_x_y_pa.txt   >  $ONCHO/vector/NigeriaHabitatSites_x_y_pa_noheader.txt
+awk  '{ if (NR>1) print $1 , $2 , $3 }'  $ONCHO/vector/NigeriaHabitatSites_x_y_pa.txt   >  $ONCHO/vector/NigeriaHabitatSites_x_y_pa_noheader.txt
 rm -fr  $ONCHO/vector/NigeriaHabitatSites_x_y_pa.gpkg
 pkascii2ogr   -n "PA"  -a_srs epsg:4326 -f GPKG  -i $ONCHO/vector/NigeriaHabitatSites_x_y_pa_noheader.txt -o $ONCHO/vector/NigeriaHabitatSites_x_y_pa.gpkg
 gdal_rasterize  -co COMPRESS=DEFLATE -co ZLEVEL=9  -ot Byte -a_nodata 255   -a "PA" -tr 0.000833333333333 0.000833333333333  -te 2 4 15 15  -a_srs EPSG:4326 $ONCHO/vector/NigeriaHabitatSites_x_y_pa.gpkg  $ONCHO/vector/NigeriaHabitatSites_x_y_pa.tif
@@ -139,6 +139,18 @@ gdallocationinfo -geoloc -wgs84 -valonly $ONCHO/input/livestock/all_tif.vrt < $O
 
 echo "GHSpop_90m" > $ONCHO/vector/pred_pop.txt
 gdallocationinfo -geoloc -wgs84 -valonly $ONCHO/input/population/GHSpop_90m.tif  < $ONCHO/vector/NigeriaHabitatSites_x_y_uniq_noheader.txt  >> $ONCHO/vector/pred_pop.txt
+
+####  landcover 
+
+echo "LC2021" > $ONCHO/vector/pred_landcover.txt
+gdallocationinfo -geoloc -wgs84 -valonly $ONCHO/input/landcover/lc2021_wgs84_r.tif  < $ONCHO/vector/NigeriaHabitatSites_x_y_uniq_noheader.txt  >> $ONCHO/vector/pred_landcover.txt
+
+##### ecorigion 
+
+echo "ER2017" > $ONCHO/vector/pred_ecoreg.txt
+gdallocationinfo -geoloc -wgs84 -valonly $ONCHO/input/ecoregions/Ecoregions2017.tif   < $ONCHO/vector/NigeriaHabitatSites_x_y_uniq_noheader.txt  >> $ONCHO/vector/pred_ecoreg.txt
+
+#### merging predictors 
 
 paste -d " " $ONCHO/vector/NigeriaHabitatSites_x_y_pa_uniq_header.txt $ONCHO/vector/pred_*.txt |  sed  's,  , ,g' > $ONCHO/vector/x_y_pa_predictors.txt
 awk '{ print $1="", $2="", $0  }' $ONCHO/vector/x_y_pa_predictors.txt |  sed  's,    ,,g'  > $ONCHO/vector/x_y_pa_predictors4R.txt

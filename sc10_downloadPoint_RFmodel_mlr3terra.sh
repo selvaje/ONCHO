@@ -9,7 +9,7 @@
 #SBATCH --array=1-41
 ## array=1-41
 
-#####  for seed in $(seq 1 20);  do sbatch  --export=seed=$seed /vast/palmer/home.grace/ga254/scripts_gitreps/ONCHO/sc10_downloadPoint_RFmodel_mlr3terra.sh ; done 
+#####  for seed in $(seq 1 100);  do sbatch  --export=seed=$seed /vast/palmer/home.grace/ga254/scripts_gitreps/ONCHO/sc10_downloadPoint_RFmodel_mlr3terra.sh ; done 
 
 #  x 2 15 
 #  y 4 15                                                                                                              remove the first row that includes only see area
@@ -65,15 +65,26 @@ seed <- as.numeric(Sys.getenv("seed"))
 set.seed(seed)
 
 table = read.table("x_y_pa_predictors4R.txt", header = TRUE, sep = " ")
+table$ER2017 =   as.factor(table$ER2017)
+table$LC2021 =   as.factor(table$LC2021)
+
 des.table = describe(table)
 
 write.table(des.table, "stat_allVar.txt", quote = FALSE  )
 
-mod.rfP = ranger( pa ~ . , table ,   probability = TRUE  ,  classification=TRUE ,   importance="permutation")
+#### variable selection 
+library("varSelRF")
+table$pa =   as.factor(table$pa)
+rf.vs =  varSelRF(table[-c(1,1)]  , table$pa , ntree = 500,  mtryFactor=11 ,    ntreeIterat = 500, vars.drop.frac = 0.1)
+table.rf.vs = subset(table, select = rf.vs1$selected.vars)
+table.rf.vs$pa = table$pa
+#####
+
+mod.rfP = ranger( pa ~ . , table.rf.vs  ,   probability = TRUE  ,  classification=TRUE ,   importance="permutation")
 print(mod.rfP)
 #print(mod.rfP$oob_error)
 
-mod.rfR = ranger( pa ~ . , table , probability = FALSE  ,  classification=TRUE ,   importance="permutation")
+mod.rfR = ranger( pa ~ . , table.rf.vs  , probability = FALSE  ,  classification=TRUE ,   importance="permutation")
 print(mod.rfR)
 # print(mod.rfR$oob_error)
 
@@ -138,7 +149,10 @@ seed <- as.numeric(Sys.getenv("seed"))
 set.seed(seed)
 
 table = read.table(paste0("../vector_seed",seed,"/x_y_pa_predictors4R_select.txt"), header = TRUE, sep = " ")
-table$pa = as.factor(table$pa)  # usefull for il backend
+table$pa     = as.factor(table$pa)  # usefull for il backend
+table$ER2017 =   as.factor(table$ER2017)
+table$LC2021 =   as.factor(table$LC2021)
+
 summary(table)
 
 backend = as_data_backend(table)    # this is just table for the learner
@@ -157,6 +171,15 @@ learnerR$parallel_predict = TRUE
 print(learnerR)
 learnerR$train(task)
 learnerR$model
+
+impP=as.data.frame(importance(learnerP$model))
+impR=as.data.frame(importance(learnerR$model))
+
+impP.s = impP[order(impP$"importance(learnerP$model)",decreasing=TRUE), , drop = FALSE]
+impR.s = impR[order(impR$"importance(learnerR$model)",decreasing=TRUE), , drop = FALSE]
+
+write.table(impP.s, paste0("../vector_seed",seed,"/importanceP_selVar.txt"), quote = FALSE  )
+write.table(impR.s, paste0("../vector_seed",seed,"/importanceR_selVar.txt"), quote = FALSE  )
 
 conf.matrix = learnerR$model$confusion.matrix
 pred.error =  learnerR$model$prediction.error 
@@ -257,11 +280,11 @@ print ("create the table")
 save.image(paste0("../vector_seed",seed,"/data2_",xmin,"_",ymin,".RData"))
 env_predP = terra::predict(env,  model =  learnerP,  predict_type = "prob" ,  fun = predict )
 
-terra::writeRaster (env_predP, paste0("/gpfs/gibbs/project/sbsc/ga254/dataproces/ONCHO/prediction_seed",seed,"/prediction_seed",seed,"P_",xmin,"_",ymin,".tif"), gdal=c("COMPRESS=DEFLATE","ZLEVEL=9"), overwrite=TRUE , datatype="Float32")
+terra::writeRaster (env_predP, paste0("/gpfs/gibbs/project/sbsc/ga254/dataproces/ONCHO/prediction_seed",seed,"/prediction_seed",seed,"P_",xmin,"_",ymin,".tif"), gdal=c("COMPRESS=DEFLATE","ZLEVEL=9"), overwrite=TRUE , datatype="Float32" , NAflag=-9999)
 
-env_predC = terra::predict(env , model = learnerR,   predict_type = "response" , fun = predict )
+env_predR = terra::predict(env , model = learnerR,   predict_type = "response" , fun = predict )
 
-terra::writeRaster (env_predC, paste0("/gpfs/gibbs/project/sbsc/ga254/dataproces/ONCHO/prediction_seed",seed,"/prediction_seed",seed,"R_",xmin,"_",ymin,".tif"), gdal=c("COMPRESS=DEFLATE","ZLEVEL=9"), overwrite=TRUE , datatype="Byte")
+terra::writeRaster (env_predR, paste0("/gpfs/gibbs/project/sbsc/ga254/dataproces/ONCHO/prediction_seed",seed,"/prediction_seed",seed,"R_",xmin,"_",ymin,".tif"), gdal=c("COMPRESS=DEFLATE","ZLEVEL=9"), overwrite=TRUE , datatype="Byte" , NAflag=255)
 
 save.image(paste0("../vector_seed",seed,"/data2_",xmin,"_",ymin,".RData"))
 
@@ -301,3 +324,12 @@ pksetmask -m  ../input/geomorpho90m/slope.tif  -co COMPRESS=DEFLATE -co ZLEVEL=9
 
 rm $ONCHO/prediction_seed${seed}/*.tif.aux.xml
 fi
+
+
+exit 
+
+# for controlling 
+for seq  in $(seq 1 100) ; do echo $seq $( pkstat --hist -i prediction_seed${seq}/prediction_seed${seq}R_all_1km_msk.tif   | grep -v " 0" | grep -v "255 " ) ; done  | grep -e nan -e FileOpenError  | awk '{printf ("%i " , $1) }'
+
+# check if all the tiles have been done correctly 
+for seq  in $(seq 1 100) ; do echo $seq $( pkstat --hist -i prediction_seed${seq}/prediction_seed${seq}R_all_1km_msk.tif   | grep -v " 0" | grep -e "255 " ) ; done | grep -v 134625
