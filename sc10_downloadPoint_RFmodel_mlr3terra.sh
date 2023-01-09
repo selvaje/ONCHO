@@ -38,8 +38,7 @@ echo $seed
 if [ $SLURM_ARRAY_TASK_ID -eq 1  ] ; then
 
 rm -f $ONCHO/vector_seed$seed/data*.RData
-rm -f $ONCHO/vector_seed$seed/allVar.mod.rf.txt
-rm -f $ONCHO/vector_seed$seed/importance_allVar.txt
+rm -f $ONCHO/vector_seed$seed/*.txt
 rm -f $ONCHO/prediction_seed$seed/prediction_*_*.tif
 rm -f $ONCHO/prediction_seed$seed/*.tif.aux.xml
 
@@ -58,8 +57,8 @@ module --ignore_cache load R/4.1.0-foss-2020b
 # first RF for sorting the most important variables
 
 Rscript --vanilla  -e '
-library(ranger)
-library(psych)
+library("randomForest")
+library("varSelRF")
 
 seed <- as.numeric(Sys.getenv("seed"))
 set.seed(seed)
@@ -68,94 +67,73 @@ table = read.table("x_y_pa_predictors4R.txt", header = TRUE, sep = " ")
 table$ER2017 =   as.factor(table$ER2017)
 table$LC2021 =   as.factor(table$LC2021)
 
-des.table = describe(table)
+des.table = summary(table)
 
 write.table(des.table, "stat_allVar.txt", quote = FALSE  )
 
-#### variable selection 
-library("varSelRF")
+#### variable selection base on varSelRF 
 table$pa =   as.factor(table$pa)
 rf.vs =  varSelRF(table[-c(1,1)]  , table$pa , ntree = 500,  mtryFactor=11 ,    ntreeIterat = 500, vars.drop.frac = 0.1)
-table.rf.vs = subset(table, select = rf.vs1$selected.vars)
-table.rf.vs$pa = table$pa
+table.rf.vs = subset(table, select = rf.vs$selected.vars)
+table.rf.vs$pa = table$pa 
 #####
 
-mod.rfP = ranger( pa ~ . , table.rf.vs  ,   probability = TRUE  ,  classification=TRUE ,   importance="permutation")
-print(mod.rfP)
-#print(mod.rfP$oob_error)
+library("ranger")
+# fit a model with variable selection 
+mod.rfP.vs = ranger( pa ~ . , table.rf.vs  , probability = TRUE  ,  classification=TRUE ,   importance="permutation")
+mod.rfR.vs = ranger( pa ~ . , table.rf.vs  , probability = FALSE ,  classification=TRUE ,   importance="permutation")
 
-mod.rfR = ranger( pa ~ . , table.rf.vs  , probability = FALSE  ,  classification=TRUE ,   importance="permutation")
-print(mod.rfR)
-# print(mod.rfR$oob_error)
-
-
-impP=as.data.frame(importance(mod.rfP))
-impR=as.data.frame(importance(mod.rfR))
+impP.vs=as.data.frame(importance(mod.rfP.vs))
+impR.vs=as.data.frame(importance(mod.rfR.vs))
 save.image(paste0("../vector_seed",seed,"/data0.RData"))
 
-impP.s = impP[order(impP$"importance(mod.rfP)",decreasing=TRUE), , drop = FALSE]
-impR.s = impR[order(impR$"importance(mod.rfR)",decreasing=TRUE), , drop = FALSE]
+impP.vs.s = impP.vs[order(impP.vs$"importance(mod.rfP.vs)",decreasing=TRUE), , drop = FALSE]
+impR.vs.s = impR.vs[order(impR.vs$"importance(mod.rfR.vs)",decreasing=TRUE), , drop = FALSE]
 
-impP.s
-impR.s
+write.table(impP.vs.s, paste0("../vector_seed",seed,"/importanceP_selvsVar.txt"), quote = FALSE  )
+s.mod.rfP = capture.output(mod.rfP.vs)
+write.table(s.mod.rfP, paste0("../vector_seed",seed,"/selvsVarP.mod.rf.txt"), quote = FALSE , row.names = FALSE )
 
-write.table(impP.s, paste0("../vector_seed",seed,"/importanceP_allVar.txt"), quote = FALSE  )
-s.mod.rfP = capture.output(mod.rfP)
-write.table(s.mod.rfP, paste0("../vector_seed",seed,"/allVarP.mod.rf.txt"), quote = FALSE , row.names = FALSE )
+write.table(impR.vs.s, paste0("../vector_seed",seed,"/importanceR_selvsVar.txt"), quote = FALSE  )
+s.mod.rfR = capture.output(mod.rfR.vs)
+write.table(s.mod.rfR, paste0("../vector_seed",seed,"/selvsVarR.mod.rf.txt"), quote = FALSE , row.names = FALSE )
 
-write.table(impR.s, paste0("../vector_seed",seed,"/importanceR_allVar.txt"), quote = FALSE  )
-s.mod.rfR = capture.output(mod.rfR)
-write.table(s.mod.rfR, paste0("../vector_seed",seed,"/allVarR.mod.rf.txt"), quote = FALSE , row.names = FALSE )
+# fit a model with all variables
+mod.rfP.all = ranger( pa ~ . , table  , probability = TRUE   ,  classification=TRUE ,   importance="permutation")
+mod.rfR.all = ranger( pa ~ . , table  , probability = FALSE  ,  classification=TRUE ,   importance="permutation")
 
+impP.all=as.data.frame(importance(mod.rfP.all))
+impR.all=as.data.frame(importance(mod.rfR.all))
 save.image(paste0("../vector_seed",seed,"/data0.RData"))
-'
 
-# 
+impP.all.s = impP.all[order(impP.all$"importance(mod.rfP.all)",decreasing=TRUE), , drop = FALSE]
+impR.all.s = impR.all[order(impR.all$"importance(mod.rfR.all)",decreasing=TRUE), , drop = FALSE]
 
-IMPN=40
-rm -f $ONCHO/vector_seed$seed/x_y_pa_*_tmp.txt
-for COLNAME in  $(awk -v IMPN=$IMPN  '{if (NR>1 && NR<=IMPN) print $1  }' $ONCHO/vector_seed$seed/importanceR_allVar.txt) ; do
-awk  -v COLNAME=$COLNAME ' { if (NR==1){ for (col=1;col<=NF;col++) { if ($col==COLNAME) {colprint=col; print $colprint}}} else {print $colprint }}' $ONCHO/vector/x_y_pa_predictors4R.txt  > $ONCHO/vector_seed$seed/x_y_pa_${COLNAME}_tmp.txt
-done 
+write.table(impP.all.s, paste0("../vector_seed",seed,"/importanceP_allVar.txt"), quote = FALSE  )
+s.mod.rfP.all = capture.output(mod.rfP.all)
+write.table(s.mod.rfP.all, paste0("../vector_seed",seed,"/allVarP.mod.rf.txt"), quote = FALSE , row.names = FALSE )
 
-for COLNAME in  $(awk -v IMPN=$IMPN '{if (NR>1 && NR<=IMPN) print $1  }' $ONCHO/vector_seed$seed/importanceR_allVar.txt) ; do
-    echo $COLNAME $(gdalinfo $ONCHO/input/*/$COLNAME.tif | grep "NoData"  | awk -F =  '{ print $2  }' )
-done > $ONCHO/vector_seed$seed/predictors4R_select.txt
+write.table(impR.all.s, paste0("../vector_seed",seed,"/importanceR_allVar.txt"), quote = FALSE  )
+s.mod.rfR.all = capture.output(mod.rfR.all)
+write.table(s.mod.rfR.all, paste0("../vector_seed",seed,"/allVarR.mod.rf.txt"), quote = FALSE , row.names = FALSE )
 
-paste -d " " <(awk '{print $3}' $ONCHO/vector/NigeriaHabitatSites_x_y_pa_uniq_header.txt ) $ONCHO/vector_seed$seed/x_y_pa_*_tmp.txt > $ONCHO/vector_seed$seed/x_y_pa_predictors4R_select.txt
-rm -f $ONCHO/vector_seed$seed/x_y_pa_*_tmp.txt
+# fit the model base on the variable ranking selection 
 
 
-#### module load GCCcore/11.2.0 to install rgdal
-#### options(menu.graphics=FALSE) for no gui 
-echo "#######################################################"
-echo "############### SECOND RF #############################"
-echo "#######################################################"
-
-#### https://mlr3spatial.mlr-org.com/articles/mlr3spatial.html
-
-# training RF and save the model for make the prediction later on 
-
-Rscript --vanilla  -e '
 library("rlang")
 library(mlr3spatiotempcv)  # spatio-temporal resampling 
 library(mlr3tuning)        # hyperparameter tuning package
 library("mlr3learners")
-library("ranger")
 library("stars")
 library("terra")
 library("future")
-seed <- as.numeric(Sys.getenv("seed"))
-set.seed(seed)
 
-table = read.table(paste0("../vector_seed",seed,"/x_y_pa_predictors4R_select.txt"), header = TRUE, sep = " ")
-table$pa     = as.factor(table$pa)  # usefull for il backend
-table$ER2017 =   as.factor(table$ER2017)
-table$LC2021 =   as.factor(table$LC2021)
+#########################                             30 for variable selection 
+table.rf.vr = subset(table, select = rownames(impP.all.s)[1:30]   )
+table.rf.vr$pa = as.factor(table$pa)  # usefull for il backend
+#####
 
-summary(table)
-
-backend = as_data_backend(table)    # this is just table for the learner
+backend = as_data_backend(table.rf.vr)    # this is just table for the learner
 
 task = as_task_classif(backend, target = "pa")
 print(task)
@@ -178,8 +156,8 @@ impR=as.data.frame(importance(learnerR$model))
 impP.s = impP[order(impP$"importance(learnerP$model)",decreasing=TRUE), , drop = FALSE]
 impR.s = impR[order(impR$"importance(learnerR$model)",decreasing=TRUE), , drop = FALSE]
 
-write.table(impP.s, paste0("../vector_seed",seed,"/importanceP_selVar.txt"), quote = FALSE  )
-write.table(impR.s, paste0("../vector_seed",seed,"/importanceR_selVar.txt"), quote = FALSE  )
+write.table(impP.s, paste0("../vector_seed",seed,"/importanceP_selvrVar.txt"), quote = FALSE  )
+write.table(impR.s, paste0("../vector_seed",seed,"/importanceR_selvrVar.txt"), quote = FALSE  )
 
 conf.matrix = learnerR$model$confusion.matrix
 pred.error =  learnerR$model$prediction.error 
@@ -187,8 +165,8 @@ pred.error =  learnerR$model$prediction.error
 write.table(pred.error , paste0("../vector_seed",seed,"/pred_error.txt"))
 write.table(conf.matrix, paste0("../vector_seed",seed,"/conf_matrix.txt"))
 
-write.table(capture.output(learnerR$model), paste0("../vector_seed",seed,"/selVarR.mod.rf.txt"), quote = FALSE , row.names = FALSE )
-write.table(capture.output(learnerP$model), paste0("../vector_seed",seed,"/selVarP.mod.rf.txt"), quote = FALSE , row.names = FALSE )
+write.table(capture.output(learnerR$model), paste0("../vector_seed",seed,"/selvrVarR.mod.rf.txt"), quote = FALSE , row.names = FALSE )
+write.table(capture.output(learnerP$model), paste0("../vector_seed",seed,"/selvrVarP.mod.rf.txt"), quote = FALSE , row.names = FALSE )
 
 save.image(paste0("../vector_seed",seed,"/data1.RData"))
 '
@@ -240,7 +218,9 @@ print(learnerP)
 print ("start the prediction")
 # bb = st_bbox ( c(xmin = xmin , xmax =  xmax , ymin =  ymin, ymax =  ymax  )  , crs = 4326 ) 
 
-for (var in names(table)[-1] ) {
+table.rf.vr = subset(table.rf.vr, select =  -c(pa)) ### remove pa 
+
+for (var in names( table.rf.vr) )  {
 print(var)
 raster  = terra::rast (Sys.glob(paste0("../input/*/",var,".tif")  ) )
 
@@ -251,10 +231,10 @@ rm (raster)
 gc() ; gc()
 
 print ("make stack layer")
-stack = get(names(table)[2] )
+stack = get(names(table.rf.vr)[1] )
 stack
 
-for (var in names(table)[-2:-1] ) {
+for (var in names(table.rf.vr)[-1] ) {
 print(var)
 stack =  c(stack,get(var))
 }
@@ -333,3 +313,9 @@ for seq  in $(seq 1 100) ; do echo $seq $( pkstat --hist -i prediction_seed${seq
 
 # check if all the tiles have been done correctly 
 for seq  in $(seq 1 100) ; do echo $seq $( pkstat --hist -i prediction_seed${seq}/prediction_seed${seq}R_all_1km_msk.tif   | grep -v " 0" | grep -e "255 " ) ; done | grep -v 134625
+
+
+
+grep OOB   vector_seed*/allVarR.mod.rf.txt | awk ' { sum = sum + $4 } END {print sum / 100}' 
+grep OOB   vector_seed*/selvsVarR.mod.rf.txt  | awk ' { sum = sum + $4 } END {print sum / 100}' 
+grep OOB   vector_seed*/selvrVarR.mod.rf.txt  | awk ' { sum = sum + $4 } END {print sum / 100}' 
