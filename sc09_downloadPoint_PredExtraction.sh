@@ -9,7 +9,7 @@
 
 ###### sbatch  /vast/palmer/home.grace/ga254/scripts_gitreps/ONCHO/sc09_downloadPoint_PredExtraction.sh
 
-ONCHO=/gpfs/gibbs/project/sbsc/ga254/dataproces/ONCHO
+export ONCHO=/gpfs/gibbs/project/sbsc/ga254/dataproces/ONCHO
 cd $ONCHO/vector
 
 module purge
@@ -24,6 +24,7 @@ module purge
 
 source ~/bin/gdal3
 source ~/bin/pktools
+source ~/bin/grass78m
 
 tr '\r' '\n' < $ONCHO/vector/clean_data_nigeria_project.csv | awk '!/^[[:space:]]*$/' | grep -v "94716"  > $ONCHO/vector/clean_data_nigeria_project_unix.csv
 
@@ -82,6 +83,32 @@ awk  '{ print $1 , $2 , $3 }' $ONCHO/vector/NigeriaHabitatSites_x_y_pa_uniq_nohe
 echo "x y" >  $ONCHO/vector/NigeriaHabitatSites_x_y_uniq_header.txt
 awk  '{ print $1 , $2}' $ONCHO/vector/NigeriaHabitatSites_x_y_pa_uniq_noheader.txt  >>  $ONCHO/vector/NigeriaHabitatSites_x_y_uniq_header.txt
 
+
+#### crate 0 proximit and 1 proximity
+
+pkascii2ogr -n "PA" -a_srs epsg:4326 -f GPKG -i $ONCHO/vector/NigeriaHabitatSites_x_y_pa_uniq_noheader.txt -o $ONCHO/vector/NigeriaHabitatSites_x_y_pa_uniq.gpkg
+ 
+# grass78  -f -text --tmp-location  -c $ONCHO/input/geomorpho90m/elevation.tif     <<'EOF'
+
+# for radius in 0.2 0.4 0.5 0.6 0.8 1 ; do 
+# r.external  input=$ONCHO/input/geomorpho90m/elevation.tif output=elv --overwrite
+# g.region res=0:00:30
+# v.in.ogr  input=$ONCHO/vector/NigeriaHabitatSites_x_y_pa_uniq.gpkg output=pa   where="PA = 0" --o
+# v.kernel input=pa output=kernel   radius=$radius   multiplier=1 --o
+# g.region res=0:00:03
+# r.out.gdal --o -f -c -m createopt="COMPRESS=DEFLATE,ZLEVEL=9" nodata=-9999 type=Float32 format=GTiff input=kernel output=$ONCHO/input/pa_kernel/kernel0_tmp.tif
+# pksetmask -co COMPRESS=DEFLATE -co ZLEVEL=9 -m $ONCHO/input/geomorpho90m/elevation.tif  -msknodata -9999 -nodata -9999 -i $ONCHO/input/pa_kernel/kernel0_tmp.tif -o $ONCHO/input/pa_kernel/kernel0_R$radius.tif
+# g.region res=0:00:30
+# v.in.ogr  input=$ONCHO/vector/NigeriaHabitatSites_x_y_pa_uniq.gpkg output=pa   where="PA = 1" --o 
+# v.kernel input=pa output=kernel   radius=$radius  multiplier=1 --o
+# g.region res=0:00:03
+# r.out.gdal --o -f -c -m createopt="COMPRESS=DEFLATE,ZLEVEL=9" nodata=-9999 type=Float32 format=GTiff input=kernel output=$ONCHO/input/pa_kernel/kernel1_tmp.tif
+# pksetmask -co COMPRESS=DEFLATE -co ZLEVEL=9 -m $ONCHO/input/geomorpho90m/elevation.tif  -msknodata -9999 -nodata -9999 -i $ONCHO/input/pa_kernel/kernel1_tmp.tif -o $ONCHO/input/pa_kernel/kernel1_R$radius.tif
+# done 
+# EOF
+
+rm $ONCHO/input/pa_kernel/kernel0_tmp.tif $ONCHO/input/pa_kernel/kernel1_tmp.tif
+
 ### start the predictors  extraction 
 
 rm -f $ONCHO/vector/pred_*.txt 
@@ -93,7 +120,7 @@ BB=$(ls $ONCHO/input/$var/*.tif | grep -v -e _acc -e _msk  | wc -l )
 
 for var1 in $( ls $ONCHO/input/$var/*.tif  | grep -v -e _acc -e _msk )  ; do echo -n $(basename  $var1 .tif)" " ; done > $ONCHO/vector/pred_${var}.txt
 echo "" >> $ONCHO/vector/pred_${var}.txt
-gdallocationinfo -geoloc -wgs84 -valonly $ONCHO/input/$var/all_tif.vrt < $ONCHO/vector/NigeriaHabitatSites_x_y_uniq_noheader.txt | awk -v BB=$BB 'ORS=NR%BB?FS:RS' >> $ONCHO/vector/pred_${var}.txt
+gdallocationinfo -geoloc -wgs84 -valonly $ONCHO/input/$var/all_tif.vrt < $ONCHO/vector/NigeriaHabitatSites_x_y_uniq_noheader.txt   |   awk -v BB=$BB 'ORS=NR%BB?FS:RS' >> $ONCHO/vector/pred_${var}.txt
 
 done   
 
@@ -104,7 +131,7 @@ BB=$(ls $ONCHO/input/$var/*_r.tif | grep -v -e _acc -e _msk  | wc -l )
 
 for var1 in $( ls $ONCHO/input/$var/*_r.tif  | grep -v -e _acc -e _msk )  ; do echo -n $(basename  $var1 .tif)" " ; done > $ONCHO/vector/pred_${var}.txt
 echo "" >> $ONCHO/vector/pred_${var}.txt
-gdallocationinfo -geoloc -wgs84 -valonly $ONCHO/input/$var/all_tif.vrt < $ONCHO/vector/NigeriaHabitatSites_x_y_uniq_noheader.txt | awk -v BB=$BB 'ORS=NR%BB?FS:RS' >> $ONCHO/vector/pred_${var}.txt
+gdallocationinfo -geoloc -wgs84 -valonly $ONCHO/input/$var/all_tif.vrt < $ONCHO/vector/NigeriaHabitatSites_x_y_uniq_noheader.txt | awk -v BB=$BB   |   'ORS=NR%BB?FS:RS' >> $ONCHO/vector/pred_${var}.txt
 
 done #### close the for var in chelsa soilgrids soiltemp 
 
@@ -143,15 +170,27 @@ gdallocationinfo -geoloc -wgs84 -valonly $ONCHO/input/population/GHSpop_90m.tif 
 ####  landcover 
 
 echo "LC2021" > $ONCHO/vector/pred_landcover.txt
-gdallocationinfo -geoloc -wgs84 -valonly $ONCHO/input/landcover/lc2021_wgs84_r.tif  < $ONCHO/vector/NigeriaHabitatSites_x_y_uniq_noheader.txt  >> $ONCHO/vector/pred_landcover.txt
+gdallocationinfo -geoloc -wgs84 -valonly $ONCHO/input/landcover/LC2021.tif  < $ONCHO/vector/NigeriaHabitatSites_x_y_uniq_noheader.txt  >> $ONCHO/vector/pred_landcover.txt
 
 ##### ecorigion 
 
 echo "ER2017" > $ONCHO/vector/pred_ecoreg.txt
-gdallocationinfo -geoloc -wgs84 -valonly $ONCHO/input/ecoregions/Ecoregions2017.tif   < $ONCHO/vector/NigeriaHabitatSites_x_y_uniq_noheader.txt  >> $ONCHO/vector/pred_ecoreg.txt
+gdallocationinfo -geoloc -wgs84 -valonly $ONCHO/input/ecoregions/ERcase 
+2017.tif   < $ONCHO/vector/NigeriaHabitatSites_x_y_uniq_noheader.txt  >> $ONCHO/vector/pred_ecoreg.txt
+
+# #### kernel  
+# for radius in 0.2 0.4 0.5 0.6 0.8 1 ; do 
+# echo "kernel1_R$radius" > $ONCHO/vector/pred_kernel1_R$radius.txt
+# gdallocationinfo -geoloc -wgs84 -valonly    $ONCHO/input/pa_kernel/kernel1_R$radius.tif   < $ONCHO/vector/NigeriaHabitatSites_x_y_uniq_noheader.txt  >> $ONCHO/vector/pred_kernel1_R$radius.txt
+
+# echo "kernel0_R$radius" > $ONCHO/vector/pred_kernel0_R$radius.txt
+# gdallocationinfo -geoloc -wgs84 -valonly    $ONCHO/input/pa_kernel/kernel0_R$radius.tif   < $ONCHO/vector/NigeriaHabitatSites_x_y_uniq_noheader.txt  >> $ONCHO/vector/pred_kernel0_R$radius.txt
+# done 
+#### lat long  not ingested as predictor because already in the x y pa table 
 
 #### merging predictors 
 
 paste -d " " $ONCHO/vector/NigeriaHabitatSites_x_y_pa_uniq_header.txt $ONCHO/vector/pred_*.txt |  sed  's,  , ,g' > $ONCHO/vector/x_y_pa_predictors.txt
 awk '{ print $1="", $2="", $0  }' $ONCHO/vector/x_y_pa_predictors.txt |  sed  's,    ,,g'  > $ONCHO/vector/x_y_pa_predictors4R.txt
+
 

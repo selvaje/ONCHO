@@ -1,19 +1,21 @@
 #!/bin/bash
 #SBATCH -p scavenge
 #SBATCH -n 1 -c 1 -N 1
-#SBATCH -t 10:00:00 
-#SBATCH -o /gpfs/scratch60/fas/sbsc/ga254/stdout/sc01_crop_input.sh.%J.out  
-#SBATCH -e /gpfs/scratch60/fas/sbsc/ga254/stderr/sc01_crop_input.sh.%J.err
+#SBATCH -t 10:00:00
+#SBATCH -o /vast/palmer/scratch/sbsc/ga254/stdout/sc01_crop_input.sh.%J.out
+#SBATCH -e /vast/palmer/scratch/sbsc/ga254/stderr/sc01_crop_input.sh.%J.err
 #SBATCH --job-name=sc01_crop_input.sh
 #SBATCH --mem=40G
 
+module load StdEnv
 source ~/bin/gdal3
 source ~/bin/pktools
-
-##### sbatch /vast/palmer/home.grace/ga254/scripts/ONCHO/sc01_crop_input.sh
+             
+##### sbatch /vast/palmer/home.grace/ga254/scripts_gitreps/ONCHO/sc01_crop_input.sh
 
 MERIT=/gpfs/gibbs/pi/hydro/hydro/dataproces/MERIT/geomorphometry_90m_wgs84
-ONCHO=/gpfs/loomis/project/sbsc/ga254/dataproces/ONCHO
+ONCHO=/gpfs/gibbs/project/sbsc/ga254/dataproces/ONCHO
+
 
 # for TOPO in geom aspect aspect-sine cti dev_scale dxx dy eastness pcurv roughness slope tcurv tri aspect-cosine convergence dev_magnitude dx dxy dyy elev-stdev northness rough-magnitude rough-scale spi tpi vrm ; do 
 #     gdalbuildvrt -overwrite $MERIT/${TOPO}/all_${TOPO}_90M.vrt $MERIT/${TOPO}/${TOPO}_90M_???????.tif 
@@ -39,8 +41,8 @@ HYDRO=/gpfs/gibbs/pi/hydro/hydro/dataproces/MERIT_HYDRO/hydrography90m_v.1.0
 
 for HYDROD in   flow.index  r.stream.distance  r.stream.slope  r.watershed  ; do 
     for DIR in $(ls $HYDRO/$HYDROD ) ; do 
-     gdal_translate -projwin 2 15 15 4 -co COMPRESS=DEFLATE -co ZLEVEL=9   $HYDRO/$HYDROD/$DIR/$(basename $DIR _tiles20d).vrt /tmp/$(basename $DIR _tiles20d).tif 
-     pksetmask -co COMPRESS=DEFLATE -co ZLEVEL=9 -m /tmp/$(basename $DIR _tiles20d).tif -msknodata -9999  -nodata 0 -i  /tmp/$(basename $DIR _tiles20d).tif   -o $ONCHO/input/hydrography90m/$(basename $DIR _tiles20d).tif 
+     gdal_translate  -projwin 2 15 15 4 -co COMPRESS=DEFLATE -co ZLEVEL=9   $HYDRO/$HYDROD/$DIR/$(basename $DIR _tiles20d).vrt /tmp/$(basename $DIR _tiles20d).tif 
+     pksetmask  -co COMPRESS=DEFLATE -co ZLEVEL=9 -m /tmp/$(basename $DIR _tiles20d).tif -msknodata -9999  -nodata 0 -i  /tmp/$(basename $DIR _tiles20d).tif   -o $ONCHO/input/hydrography90m/$(basename $DIR _tiles20d).tif 
      rm /tmp/$(basename $DIR _tiles20d).tif 
      gdal_edit.py -a_nodata -9999 $ONCHO/input/hydrography90m/$(basename $DIR _tiles20d).tif 
     done 
@@ -60,18 +62,21 @@ mv $ONCHO/input/hydrography90m/slope_curv_min_dw_cel_tmp.tif  $ONCHO/input/hydro
 pkreclass -c -9999999  -r -2147483648 -co COMPRESS=DEFLATE -co ZLEVEL=9 -i $ONCHO/input/hydrography90m/slope_grad_dw_cel.tif -o $ONCHO/input/hydrography90m/slope_grad_dw_cel_tmp.tif
 mv $ONCHO/input/hydrography90m/slope_grad_dw_cel_tmp.tif  $ONCHO/input/hydrography90m/slope_grad_dw_cel.tif 
 
-#### remove some tif
-
-
 exit 
-
+        
 CHELSA=/gpfs/gibbs/pi/hydro/hydro/dataproces/CHELSA/climatologies/bio
 
 for CHELSAD  in $CHELSA/CHELSA_bio*_1981-2010_V.2.1.tif  ; do
      filename=$(basename $CHELSAD _1981-2010_V.2.1.tif )
-  #   gdal_translate -projwin 2 15 15 4 -co COMPRESS=DEFLATE -co ZLEVEL=9   $CHELSAD  $ONCHO/input/chelsa/${filename}.tif
-     gdal_translate -tr 0.00083333333333333 0.00083333333333333 -r bilinear  -co COMPRESS=DEFLATE -co ZLEVEL=9   $ONCHO/input/chelsa/${filename}.tif  $ONCHO/input/chelsa/${filename}_r.tif
+     gdal_translate -projwin 2 15 15 4 -co COMPRESS=DEFLATE -co ZLEVEL=9   $CHELSAD  $ONCHO/input/chelsa/${filename}.tif
+     gdal_translate   -tr 0.00083333333333333 0.00083333333333333 -r bilinear  -co COMPRESS=DEFLATE -co ZLEVEL=9   $ONCHO/input/chelsa/${filename}.tif  $ONCHO/input/chelsa/${filename}_r.tif
 done
+##### rm manualy the same strange value
+rm   $ONCHO/input/chelsa/CHELSA_bio9_r.tif  $ONCHO/input/chelsa/CHELSA_bio9.tif 
+rm   $ONCHO/input/chelsa/CHELSA_bio19_r.tif  $ONCHO/input/chelsa/CHELSA_bio19.tif
+rm   $ONCHO/input/chelsa/CHELSA_bio8_r.tif  $ONCHO/input/chelsa/CHELSA_bio8.tif  
+rm   $ONCHO/input/chelsa/CHELSA_bio18_r.tif  $ONCHO/input/chelsa/CHELSA_bio18.tif  
+
 
 SOILT=/gpfs/gibbs/pi/hydro/hydro/dataproces/SOILTEMP/input
 
@@ -81,7 +86,7 @@ filename=$(basename  $SOIL .tif)
 # pkgetmask -co COMPRESS=DEFLATE -co ZLEVEL=9 -min  -9999999  -max 9999999 -data 1 -nodata 0   -i $ONCHO/input/soiltemp/${filename}.tif -o $ONCHO/input/soiltemp/${filename}_msk01.tif
 # pksetmask -co COMPRESS=DEFLATE -co ZLEVEL=9 -m $ONCHO/input/soiltemp/${filename}_msk01.tif -msknodata 0 -nodata -9999 -i $ONCHO/input/soiltemp/${filename}.tif -o $ONCHO/input/soiltemp/${filename}_msk.tif
 # gdal_fillnodata.py  -co COMPRESS=DEFLATE -co ZLEVEL=9 -nomask  -md 40  -si 1  $ONCHO/input/soiltemp/${filename}_msk.tif $ONCHO/input/soiltemp/${filename}.tif 
-gdal_translate -tr 0.00083333333333333 0.00083333333333333 -r bilinear  -co COMPRESS=DEFLATE -co ZLEVEL=9  $ONCHO/input/soiltemp/${filename}.tif  $ONCHO/input/soiltemp/${filename}_r.tif
+gdal_translate   -tr 0.00083333333333333 0.00083333333333333 -r bilinear  -co COMPRESS=DEFLATE -co ZLEVEL=9  $ONCHO/input/soiltemp/${filename}.tif  $ONCHO/input/soiltemp/${filename}_r.tif
 done
 
 gdalbuildvrt -overwrite -separate $ONCHO/input/soiltemp/all_tif_msk01.vrt   $ONCHO/input/soiltemp/*_msk01.tif
@@ -102,7 +107,7 @@ filename=$(basename  $SOIL  .tif)
 # gdal_translate -projwin 2 15 15 4 -co COMPRESS=DEFLATE -co ZLEVEL=9   $SOIL  $ONCHO/input/soilgrids/${filename}_tmp.tif
 # gdal_fillnodata.py  -co COMPRESS=DEFLATE -co ZLEVEL=9 -nomask  -md 40  -si 1  $ONCHO/input/soilgrids/${filename}_tmp.tif  $ONCHO/input/soilgrids/${filename}.tif
 rm -f $ONCHO/input/soilgrids/${filename}_tmp.tif
-gdal_translate -tr 0.00083333333333333 0.00083333333333333 -r bilinear  -co COMPRESS=DEFLATE -co ZLEVEL=9  $ONCHO/input/soilgrids/${filename}.tif $ONCHO/input/soilgrids/${filename}_r.tif
+gdal_translate   -tr 0.00083333333333333 0.00083333333333333 -r bilinear  -co COMPRESS=DEFLATE -co ZLEVEL=9  $ONCHO/input/soilgrids/${filename}.tif $ONCHO/input/soilgrids/${filename}_r.tif
 done
 
 pkgetmask -ot Byte -co COMPRESS=DEFLATE -co ZLEVEL=9 -min 65534 -max 65536 -data 0 -nodata 1 -i $ONCHO/input/soilgrids/AWCtS_WeigAver.tif -o $ONCHO/input/soilgrids/soilgrids_msk.tif
@@ -134,7 +139,7 @@ unzip GHS_POP_E2020_GLOBE_R2022A_54009_100_V1_0_R9_C20.zip
 
 gdalbuildvrt -overwrite $POP/pop_100m.vrt  $POP/GHS_POP_E2020_GLOBE_R2022A_54009_100_V1_0_*.tif
 
-gdalwarp -overwrite -ot Int16  -te $(getCorners4Gwarp $POP/../geomorpho90m/elevation.tif ) -t_srs EPSG:4326 -tr 0.00083333333333333 0.00083333333333333 -r bilinear  -co COMPRESS=DEFLATE -co ZLEVEL=9 $POP/pop_100m.vrt $POP/GHSpop_90m.tif
+gdalwarp -overwrite -ot Int16   -te $(getCorners4Gwarp $POP/../geomorpho90m/elevation.tif ) -t_srs EPSG:4326 -tr 0.00083333333333333 0.00083333333333333 -r bilinear  -co COMPRESS=DEFLATE -co ZLEVEL=9 $POP/pop_100m.vrt $POP/GHSpop_90m.tif
 gdal_edit.py -a_nodata -9999 $POP/GHSpop_90m.tif   
 
 # pksetmask -co COMPRESS=DEFLATE -co ZLEVEL=9 -m /tmp/$(basename $DIR _tiles20d).tif -msknodata -9999  -nodata 0 -i  /tmp/$(basename $DIR _tiles20d).tif   -o $ONCHO/input/hydrography90m/$(basename $DIR _tiles20d).tif 
@@ -145,7 +150,7 @@ gdal_edit.py -a_nodata -9999 $POP/GHSpop_90m.tif
 
 LS=/gpfs/gibbs/project/sbsc/ga254/dataproces/ONCHO/input/livestock
 for file in $LS/5_??_2010_Da.tif  ; do 
-gdal_translate -ot Int32  -projwin  $(getCorners4Gtranslate  $LS/../geomorpho90m/elevation.tif )  -tr 0.00083333333333333 0.00083333333333333 -r bilinear  -co COMPRESS=DEFLATE -co ZLEVEL=9 $file  $LS/$(basename $file .tif )_90m.tif 
+gdal_translate -ot Int32   -projwin  $(getCorners4Gtranslate  $LS/../geomorpho90m/elevation.tif )  -tr 0.00083333333333333 0.00083333333333333 -r bilinear  -co COMPRESS=DEFLATE -co ZLEVEL=9 $file  $LS/$(basename $file .tif )_90m.tif 
 pksetmask -co COMPRESS=DEFLATE -co ZLEVEL=9 -m $LS/../geomorpho90m/elevation.tif -msknodata -9999 -nodata -9999 \
                                             -m $LS/$(basename $file .tif )_90m.tif  -msknodata -0.5 -p "<"  -nodata -9999 \
 -i $LS/$(basename $file .tif )_90m.tif -o $LS/$(basename $file .tif )_90m_msk.tif
@@ -168,13 +173,14 @@ ER=/gpfs/gibbs/project/sbsc/ga254/dataproces/ONCHO/input/ecoregions
 # https://ecoregions.appspot.com/ https://academic.oup.com/bioscience/article/67/6/534/3102935 
 # wget https://storage.googleapis.com/teow2016/Ecoregions2017.zip
 
-unzip Ecoregions2017.zip
+# unzip Ecoregions2017.zip
 
-gdal_rasterize   -ot UInt16 -a_nodata 65535   -te  $(getCorners4Gwarp   $ER/../geomorpho90m/elevation.tif )  -l "Ecoregions2017"  -a "ECO_ID"   -tr 0.0083333333333333 0.0083333333333333  -co COMPRESS=DEFLATE -co ZLEVEL=9  $ER/Ecoregions2017.shp  $ER/Ecoregions2017.tif 
-
+gdal_rasterize    -a_nodata 65535   -te  $(getCorners4Gwarp   $ER/../geomorpho90m/elevation.tif )  -l "Ecoregions2017"  -a "ECO_ID"   -tr 0.0083333333333333 0.0083333333333333  -co COMPRESS=DEFLATE -co ZLEVEL=9  $ER/Ecoregions2017.shp  $ER/Ecoregions2017.tif 
+mv $ER/Ecoregions2017.tif     $ER/ER2017.tif
+gdal_edit.py -a_nodata 0     $ER/ER2017.tif
+ 
 ##### landcover 
 ### wget https://lulctimeseries.blob.core.windows.net/lulctimeseriespublic/lc2021/lulc2021.zip
-
 
 LC=/gpfs/gibbs/project/sbsc/ga254/dataproces/ONCHO/input_orig/landcover
 unzip 
@@ -182,12 +188,25 @@ unzip
 for zone in 33N 33P 31N 31P 32N 32P ; do
 gdalwarp -overwrite    -co COMPRESS=DEFLATE -co ZLEVEL=9  -r near   -t_srs EPSG:4326  -tr  0.000083333333333333333333333 0.000083333333333333333333333 $LC/lc2021/${zone}_20210101-20220101.tif $LC/${zone}_wgs84.tif 
 done 
-
 gdalbuildvrt -overwrite    $LC/lc2021_wgs84.vrt  $LC/???_wgs84.tif
 
 gdal_translate -projwin $(getCorners4Gtranslate $LC/../geomorpho90m/elevation.tif)  -co COMPRESS=DEFLATE -co ZLEVEL=9 $LC/lc2021_wgs84.vrt    $LC/../../input/landcover/lc2021_wgs84.tif  # run it 
 
-gdal_translate -projwin $(getCorners4Gtranslate $LC/../geomorpho90m/elevation.tif) -tr  0.00083333333333333333333333 0.0008333333\
+gdal_translate    -projwin $(getCorners4Gtranslate $LC/../geomorpho90m/elevation.tif) -tr  0.00083333333333333333333333 0.0008333333\
 3333333333333333 -r mode     -co COMPRESS=DEFLATE -co ZLEVEL=9  $LC/lc2021_wgs84.vrt   $LC/../../input/landcover/lc2021_wgs84_r.tif 
+mv $LC/../../input/landcover/lc2021_wgs84_r.tif $LC/../../input/landcover/LC2021.tif 
+gdal_edit.py -a_nodata 255    $LC/../../input/landcover/LC2021.tif
 
+##### lat long 
+export ONCHO=/gpfs/gibbs/project/sbsc/ga254/dataproces/ONCHO/
+
+apptainer exec  ~/bin/grass8.sif bash <<EOF
+grass -f --text -c  -c $ONCHO/input/geomorpho90m/elevation.tif    -e /tmp/mylocation
+grass /tmp/mylocation/PERMANENT --exec g.region n=15  s=4 e=15  w=2
+grass /tmp/mylocation/PERMANENT --exec r.external  input=$ONCHO/input/geomorpho90m/elevation.tif   output=elv  --overwrite
+grass /tmp/mylocation/PERMANENT --exec r.latlong -l  input=elv  output=latiy 
+grass /tmp/mylocation/PERMANENT --exec r.latlong     input=elv  output=longx
+grass /tmp/mylocation/PERMANENT --exec r.out.gdal -f --o -c -m createopt="COMPRESS=DEFLATE,ZLEVEL=9" type=Float32 format=GTiff nodata=0 input=longx output=$ONCHO/input/latlon/x.tif
+grass /tmp/mylocation/PERMANENT --exec r.out.gdal -f --o -c -m createopt="COMPRESS=DEFLATE,ZLEVEL=9" type=Float32 format=GTiff nodata=0 input=latiy output=$ONCHO/input/latlon/y.tif
+EOF
 

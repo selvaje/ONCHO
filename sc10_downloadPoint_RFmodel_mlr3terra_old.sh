@@ -5,11 +5,11 @@
 #SBATCH -o /vast/palmer/scratch/sbsc/ga254/stdout/sc10_downloadPoint_RFmodel_mlr3terra.sh.%A_%a.out 
 #SBATCH -e /vast/palmer/scratch/sbsc/ga254/stderr/sc10_downloadPoint_RFmodel_mlr3terra.sh.%A_%a.err
 #SBATCH --job-name=sc10_downloadPoint_RFmodel_mlr3terra.sh
-#SBATCH --mem=60G
+#SBATCH --mem=40G
 #SBATCH --array=1-41
 ## array=1-41
 
-#####  for seed in $(seq 1 100);  do sbatch  --export=seed=$seed /vast/palmer/home.grace/ga254/scripts_gitreps/ONCHO/sc10_downloadPoint_RFmodel_mlr3terra.sh ; done 
+#####  for seed in $(seq 1 100);  do sbatch  --export=seed=$seed /vast/palmer/home.grace/ga254/scripts_gitreps/ONCHO/sc10_downloadPoint_RFmodel_mlr3terra_old.sh ; done 
 
 #  x 2 15 
 #  y 4 15                                                                                                              remove the first row that includes only see area
@@ -66,27 +66,19 @@ set.seed(seed)
 table = read.table("x_y_pa_predictors4R.txt", header = TRUE, sep = " ")
 table$ER2017 =   as.factor(table$ER2017)
 table$LC2021 =   as.factor(table$LC2021)
-table$pa =    as.factor(table$pa)
-
-tablexy = read.table("NigeriaHabitatSites_x_y_uniq_header.txt", header = TRUE, sep = " ")
-#table$x = tablexy$x
-#table$y = tablexy$y
 
 des.table = summary(table)
 
 write.table(des.table, "stat_allVar.txt", quote = FALSE  )
 
-# t <- tuneRF(table[,-1], table[,1],  stepFactor = 1,  plot = TRUE, ntreeTry = 500, trace = TRUE,  improve = 0.01)  
-
 #### variable selection base on varSelRF 
+table$pa =   as.factor(table$pa)
 rf.vs =  varSelRF(table[-c(1,1)]  , table$pa , ntree = 500,  mtryFactor=11 ,    ntreeIterat = 500, vars.drop.frac = 0.1)
 table.rf.vs = subset(table, select = rf.vs$selected.vars)
 table.rf.vs$pa = table$pa 
 #####
 
 library("ranger")
-# library(tuneRanger) ## for now not implemented
-
 # fit a model with variable selection 
 mod.rfP.vs = ranger( pa ~ . , table.rf.vs  , probability = TRUE  ,  classification=TRUE ,   importance="permutation")
 mod.rfR.vs = ranger( pa ~ . , table.rf.vs  , probability = FALSE ,  classification=TRUE ,   importance="permutation")
@@ -128,74 +120,35 @@ write.table(s.mod.rfR.all, paste0("../vector_seed",seed,"/allVarR.mod.rf.txt"), 
 # fit the model base on the variable ranking selection 
 
 
-library(rlang)
+library("rlang")
 library(mlr3spatiotempcv)  # spatio-temporal resampling 
 library(mlr3tuning)        # hyperparameter tuning package
 library("mlr3learners")
 library("stars")
 library("terra")
 library("future")
-library("blockCV")
+
 #########################                             30 for variable selection 
 table.rf.vr = subset(table, select = rownames(impP.all.s)[1:30]   )
-table.rf.vs$pa = table$pa  # usefull for il backend
-# tablexy = read.table("NigeriaHabitatSites_x_y_uniq_noheader.txt", header = TRUE, sep = " ")
-# table.rf.vr$x = tablexy$x
-# table.rf.vr$y = tablexy$y
+table.rf.vr$pa = as.factor(table$pa)  # usefull for il backend
 #####
 
-# # create task  for cross validation 
-# task = mlr3spatiotempcv::TaskClassifST$new(
-#   id = "identifier_table.rf.vr",
-#   backend = mlr3::as_data_backend(table.rf.vr), 
-#   target = "pa", 
-#   positive = "1",
-#   coordinate_names = c("x", "y"),
-#   coords_as_features = TRUE,
-#   crs = "EPSG:4326"
-#   )
-# print(task)
+backend = as_data_backend(table.rf.vr)    # this is just table for the learner
 
-backend = as_data_backend(table.rf.vs)    # this is just table for the learner
-task = as_task_classif(backend, target = "pa" ,  positive = "1" )
+task = as_task_classif(backend, target = "pa")
+print(task)
 
-### https://mlr3extralearners.mlr-org.com/articles/learners/list_learners.html 
-learnerP = lrn("classif.ranger" , predict_type = "prob" , importance = "permutation"  ) 
+learnerP = lrn("classif.ranger" , predict_type = "prob" , importance = "permutation"  )    ### https://mlr3extralearners.mlr-org.com/articles/learners/list_learners.html 
 learnerP$parallel_predict = TRUE  
 print(learnerP)
 learnerP$train(task)  # usefull to obtain the $model
 learnerP$model
 
-learnerR = lrn("classif.ranger" , predict_type = "response" , importance = "permutation"  )    
+learnerR = lrn("classif.ranger" , predict_type = "response" , importance = "permutation"  )    ### https://mlr3extralearners.mlr-org.com/articles/learners/list_learners.html 
 learnerR$parallel_predict = TRUE  
 print(learnerR)
 learnerR$train(task)
 learnerR$model
-
-#### get  list of resamplint tecnique via  as.data.table(mlr_resamplings)
-#### https://rdrr.io/cran/mlr3spatiotempcv/man/mlr_resamplings_spcv_block.html
-
-# resampling_coords = mlr3::rsmp("repeated_spcv_coords", folds = 10, repeats = 10)
-# resampling_cv     = mlr3::rsmp("repeated_cv", folds = 10, repeats = 10)
-
-# # https://mlr3spatiotempcv.mlr-org.com/articles/mlr3spatiotempcv.html
-# # reduce verbosity
-# lgr::get_logger("mlr3")$set_threshold("warn")
-# # run spatial cross-validation and save it to resample result rf  (rr_rfc)
-
-# rr_spcv_rfc_coords = mlr3::resample(task = task, learner = learnerR, resampling = resampling_coords)
-# rr_spcv_rfc_cv     = mlr3::resample(task = task, learner = learnerR, resampling = resampling_cv)
-
-# # compute the classification accuracy  as a data.table  # https://mlr3.mlr-org.com/reference/mlr_measures.html#ref-examples 
-# score_spcv_rfc_coords = rr_spcv_rfc_coords$score(measure = mlr3::msr("classif.acc"))
-# score_spcv_rfc_cv     = rr_spcv_rfc_cv$score(measure = mlr3::msr("classif.acc"))
-
-# # keep only the columns you need
-# score_spcv_rfc         =  as.data.frame(score_spcv_rfc_coords$iteration)
-# score_spcv_rfc$coords  =  score_spcv_rfc_coords$classif.acc
-# score_spcv_rfc$cv      =  score_spcv_rfc_cv$classif.acc  #### the same of the OOB
-
-# write.table(score_spcv_rfc, paste0("../vector_seed",seed,"/cvR_selvrVar.txt"), quote = FALSE  )
 
 impP=as.data.frame(importance(learnerP$model))
 impR=as.data.frame(importance(learnerR$model))
@@ -228,14 +181,13 @@ module --ignore_cache load R/4.1.0-foss-2020b
 
 echo geo_string  =  $xmin  $xmax $ymin $ymax
 
-echo " make the RF prediction "
+### make the RF prediction 
 
 Rscript --vanilla  -e   '
 library("rlang")
 library("mlr3")
 library("mlr3spatial")
 library("mlr3learners")
-library("mlr3spatiotempcv")
 library("ranger")
 library("stars")
 library("terra")
@@ -266,9 +218,9 @@ print(learnerP)
 print ("start the prediction")
 # bb = st_bbox ( c(xmin = xmin , xmax =  xmax , ymin =  ymin, ymax =  ymax  )  , crs = 4326 ) 
 
-table.rf.vs = subset(table.rf.vs, select =  -c(pa)) ### remove pa 
+table.rf.vr = subset(table.rf.vr, select =  -c(pa)) ### remove pa 
 
-for (var in names( table.rf.vs) )  {
+for (var in names( table.rf.vr) )  {
 print(var)
 raster  = terra::rast (Sys.glob(paste0("../input/*/",var,".tif")  ) )
 
@@ -279,10 +231,10 @@ rm (raster)
 gc() ; gc()
 
 print ("make stack layer")
-stack = get(names(table.rf.vs)[1] )
+stack = get(names(table.rf.vr)[1] )
 stack
 
-for (var in names(table.rf.vs)[-1] ) {
+for (var in names(table.rf.vr)[-1] ) {
 print(var)
 stack =  c(stack,get(var))
 }
@@ -300,34 +252,19 @@ setMinMax(env)
 print ("env  str")
 class(env)
 str(env)
-
-env
  
 # rm (stack)
 gc() ;  gc() ;  
 print ("create the table")
                       
 save.image(paste0("../vector_seed",seed,"/data2_",xmin,"_",ymin,".RData"))
-env_predP = terra::predict(env,  model =  learnerP,  fun = predict )   #  predict_type = "prob" ,  fun = predict )
+env_predP = terra::predict(env,  model =  learnerP,  predict_type = "prob" ,  fun = predict )
 
 terra::writeRaster (env_predP, paste0("/gpfs/gibbs/project/sbsc/ga254/dataproces/ONCHO/prediction_seed",seed,"/prediction_seed",seed,"P_",xmin,"_",ymin,".tif"), gdal=c("COMPRESS=DEFLATE","ZLEVEL=9"), overwrite=TRUE , datatype="Float32" , NAflag=-9999)
 
-env_predR = terra::predict(env , model = learnerR, fun = predict ) ###    predict_type = "response" , fun = predict )
+env_predR = terra::predict(env , model = learnerR,   predict_type = "response" , fun = predict )
 
 terra::writeRaster (env_predR, paste0("/gpfs/gibbs/project/sbsc/ga254/dataproces/ONCHO/prediction_seed",seed,"/prediction_seed",seed,"R_",xmin,"_",ymin,".tif"), gdal=c("COMPRESS=DEFLATE","ZLEVEL=9"), overwrite=TRUE , datatype="Byte" , NAflag=255)
-
-# predict on table 
-# newdata = as.data.frame(as.matrix(env))
-# colSums(is.na(newdata))  # 0 NAs
-# but assuming there were 0s results in a more generic approach
-# ind = rowSums(is.na(newdata)) == 0
-# tmp = learnerR$predict_newdata(newdata = newdata , task = task  , predict_type = "response" , fun = predict )  
-# newdata$pred = data.table::as.data.table(tmp)[["response"]]
-# pred_2 = env$elevation
-# now fill the raster with the predicted values
-# pred_2[] = newdata$pred
-# check if terra and our manual prediction is the same
-## all(value(env_predR - pred_2) == 0)
 
 save.image(paste0("../vector_seed",seed,"/data2_",xmin,"_",ymin,".RData"))
 
@@ -379,13 +316,6 @@ for seq  in $(seq 1 100) ; do echo $seq $( pkstat --hist -i prediction_seed${seq
 
 
 
-grep OOB   vector_seed*/allVarR.mod.rf.txt    | awk ' { sum = sum + $4 } END {print sum / 100}' 
+grep OOB   vector_seed*/allVarR.mod.rf.txt | awk ' { sum = sum + $4 } END {print sum / 100}' 
 grep OOB   vector_seed*/selvsVarR.mod.rf.txt  | awk ' { sum = sum + $4 } END {print sum / 100}' 
 grep OOB   vector_seed*/selvrVarR.mod.rf.txt  | awk ' { sum = sum + $4 } END {print sum / 100}' 
-
-
-#### 
-gdalbuildvrt  $ONCHO/prediction_all/prediction_all.vrt $ONCHO/prediction_*/prediction_seed*R_all_msk.tif 
-pksetmask -m  ../input/geomorpho90m/slope.tif  -co COMPRESS=DEFLATE -co ZLEVEL=9 
-
-
