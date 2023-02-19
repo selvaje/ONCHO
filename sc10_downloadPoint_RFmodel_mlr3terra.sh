@@ -125,9 +125,6 @@ write.table(impR.all.s, paste0("../vector_seed",seed,"/importanceR_allVar.txt"),
 s.mod.rfR.all = capture.output(mod.rfR.all)
 write.table(s.mod.rfR.all, paste0("../vector_seed",seed,"/allVarR.mod.rf.txt"), quote = FALSE , row.names = FALSE )
 
-# fit the model base on the variable ranking selection 
-
-
 library(rlang)
 library(mlr3spatiotempcv)  # spatio-temporal resampling 
 library(mlr3tuning)        # hyperparameter tuning package
@@ -137,14 +134,8 @@ library("terra")
 library("future")
 library("blockCV")
 #########################                             30 for variable selection 
-table.rf.vr = subset(table, select = rownames(impP.all.s)[1:30]   )
-table.rf.vs$pa = table$pa  # usefull for il backend
-# tablexy = read.table("NigeriaHabitatSites_x_y_uniq_noheader.txt", header = TRUE, sep = " ")
-# table.rf.vr$x = tablexy$x
-# table.rf.vr$y = tablexy$y
-#####
 
-# # create task  for cross validation 
+# # create task  for cross validation    https://mlr3book.mlr-org.com/special.html  
 # task = mlr3spatiotempcv::TaskClassifST$new(
 #   id = "identifier_table.rf.vr",
 #   backend = mlr3::as_data_backend(table.rf.vr), 
@@ -152,7 +143,7 @@ table.rf.vs$pa = table$pa  # usefull for il backend
 #   positive = "1",
 #   coordinate_names = c("x", "y"),
 #   coords_as_features = TRUE,
-#   crs = "EPSG:4326"
+#   crs = 4326
 #   )
 # print(task)
 
@@ -160,13 +151,13 @@ backend = as_data_backend(table.rf.vs)    # this is just table for the learner
 task = as_task_classif(backend, target = "pa" ,  positive = "1" )
 
 ### https://mlr3extralearners.mlr-org.com/articles/learners/list_learners.html 
-learnerP = lrn("classif.ranger" , predict_type = "prob" , importance = "permutation"  ) 
+learnerP = lrn("classif.ranger", predict_types = "prob" ,  predict_type = "prob" , importance = "permutation", properties = "twoclass" ) 
 learnerP$parallel_predict = TRUE  
 print(learnerP)
 learnerP$train(task)  # usefull to obtain the $model
 learnerP$model
 
-learnerR = lrn("classif.ranger" , predict_type = "response" , importance = "permutation"  )    
+learnerR = lrn("classif.ranger", predict_types = "response", predict_type = "response"  ,  importance = "permutation", properties = "twoclass" )
 learnerR$parallel_predict = TRUE  
 print(learnerR)
 learnerR$train(task)
@@ -195,7 +186,7 @@ learnerR$model
 # score_spcv_rfc$coords  =  score_spcv_rfc_coords$classif.acc
 # score_spcv_rfc$cv      =  score_spcv_rfc_cv$classif.acc  #### the same of the OOB
 
-# write.table(score_spcv_rfc, paste0("../vector_seed",seed,"/cvR_selvrVar.txt"), quote = FALSE  )
+# write.table(score_spcv_rfc, paste0("../vector_seed",seed,"/cvR_selvsVar.txt"), quote = FALSE  )
 
 impP=as.data.frame(importance(learnerP$model))
 impR=as.data.frame(importance(learnerR$model))
@@ -203,8 +194,8 @@ impR=as.data.frame(importance(learnerR$model))
 impP.s = impP[order(impP$"importance(learnerP$model)",decreasing=TRUE), , drop = FALSE]
 impR.s = impR[order(impR$"importance(learnerR$model)",decreasing=TRUE), , drop = FALSE]
 
-write.table(impP.s, paste0("../vector_seed",seed,"/importanceP_selvrVar.txt"), quote = FALSE  )
-write.table(impR.s, paste0("../vector_seed",seed,"/importanceR_selvrVar.txt"), quote = FALSE  )
+write.table(impP.s, paste0("../vector_seed",seed,"/importanceP_selvsVar.txt"), quote = FALSE  )
+write.table(impR.s, paste0("../vector_seed",seed,"/importanceR_selvsVar.txt"), quote = FALSE  )
 
 conf.matrix = learnerR$model$confusion.matrix
 pred.error =  learnerR$model$prediction.error 
@@ -212,8 +203,8 @@ pred.error =  learnerR$model$prediction.error
 write.table(pred.error , paste0("../vector_seed",seed,"/pred_error.txt"))
 write.table(conf.matrix, paste0("../vector_seed",seed,"/conf_matrix.txt"))
 
-write.table(capture.output(learnerR$model), paste0("../vector_seed",seed,"/selvrVarR.mod.rf.txt"), quote = FALSE , row.names = FALSE )
-write.table(capture.output(learnerP$model), paste0("../vector_seed",seed,"/selvrVarP.mod.rf.txt"), quote = FALSE , row.names = FALSE )
+write.table(capture.output(learnerR$model), paste0("../vector_seed",seed,"/selvsVarR.mod.rf.txt"), quote = FALSE , row.names = FALSE )
+write.table(capture.output(learnerP$model), paste0("../vector_seed",seed,"/selvsVarP.mod.rf.txt"), quote = FALSE , row.names = FALSE )
 
 save.image(paste0("../vector_seed",seed,"/data1.RData"))
 '
@@ -261,7 +252,7 @@ print ("define response variable")
 learnerP$train(task)    #### define response variable 
 learnerR$train(task)    #### define response variable 
 print(learnerP)
-print(learnerP)
+print(learnerR)
 
 print ("start the prediction")
 # bb = st_bbox ( c(xmin = xmin , xmax =  xmax , ymin =  ymin, ymax =  ymax  )  , crs = 4326 ) 
@@ -308,11 +299,11 @@ gc() ;  gc() ;
 print ("create the table")
                       
 save.image(paste0("../vector_seed",seed,"/data2_",xmin,"_",ymin,".RData"))
-env_predP = terra::predict(env,  model =  learnerP,  fun = predict )   #  predict_type = "prob" ,  fun = predict )
+env_predP = terra::predict(env,  model =  learnerP,   predict_type = "prob" ,  fun = predict )
 
 terra::writeRaster (env_predP, paste0("/gpfs/gibbs/project/sbsc/ga254/dataproces/ONCHO/prediction_seed",seed,"/prediction_seed",seed,"P_",xmin,"_",ymin,".tif"), gdal=c("COMPRESS=DEFLATE","ZLEVEL=9"), overwrite=TRUE , datatype="Float32" , NAflag=-9999)
 
-env_predR = terra::predict(env , model = learnerR, fun = predict ) ###    predict_type = "response" , fun = predict )
+env_predR = terra::predict(env , model = learnerR,   predict_type = "response" , fun = predict )
 
 terra::writeRaster (env_predR, paste0("/gpfs/gibbs/project/sbsc/ga254/dataproces/ONCHO/prediction_seed",seed,"/prediction_seed",seed,"R_",xmin,"_",ymin,".tif"), gdal=c("COMPRESS=DEFLATE","ZLEVEL=9"), overwrite=TRUE , datatype="Byte" , NAflag=255)
 
@@ -335,7 +326,7 @@ save.image(paste0("../vector_seed",seed,"/data2_",xmin,"_",ymin,".RData"))
 rm -f  $ONCHO/prediction_seed${seed}/prediction_seed${seed}P_${xmin}_${ymin}.tif.aux.xml  $ONCHO/prediction_seed${seed}/prediction_seed${seed}R_${xmin}_${ymin}.tif.aux.xml
 
 if [ $SLURM_ARRAY_TASK_ID -eq 41  ] ; then
-sleep 2000
+sleep 1500
 module purge
 source ~/bin/gdal3
 source ~/bin/pktools
@@ -346,11 +337,11 @@ gdalbuildvrt  $ONCHO/prediction_seed${seed}/prediction_seed${seed}P_all.vrt $ONC
 gdal_translate  -co COMPRESS=DEFLATE -co ZLEVEL=9   $ONCHO/prediction_seed${seed}/prediction_seed${seed}P_all.vrt  $ONCHO/prediction_seed${seed}/prediction_seed${seed}P_all.tif 
 
 gdalbuildvrt  $ONCHO/prediction_seed${seed}/prediction_seed${seed}R_all.vrt $ONCHO/prediction_seed${seed}/prediction_seed${seed}R_[0-9]*_[0-9]*.tif
-gdal_translate  -co COMPRESS=DEFLATE -co ZLEVEL=9   $ONCHO/prediction_seed${seed}/prediction_seed${seed}R_all.vrt  $ONCHO/prediction_seed${seed}/prediction_seed${seed}R_all.tif 
+gdal_translate -ot Byte  -co COMPRESS=DEFLATE -co ZLEVEL=9   $ONCHO/prediction_seed${seed}/prediction_seed${seed}R_all.vrt  $ONCHO/prediction_seed${seed}/prediction_seed${seed}R_all.tif 
 
 pksetmask -m $ONCHO/input/hydrography90m/accumulation.tif -co COMPRESS=DEFLATE -co ZLEVEL=9 -msknodata -2147483648 -nodata -9999 -i $ONCHO/prediction_seed${seed}/prediction_seed${seed}P_all.tif -o $ONCHO/prediction_seed${seed}/prediction_seed${seed}P_all_msk.tif 
 
-pksetmask -m $ONCHO/input/hydrography90m/accumulation.tif -co COMPRESS=DEFLATE -co ZLEVEL=9 -msknodata -2147483648 -nodata 255  -i $ONCHO/prediction_seed${seed}/prediction_seed${seed}R_all.tif -o $ONCHO/prediction_seed${seed}/prediction_seed${seed}R_all_msk.tif 
+pksetmask -ot Byte   -m $ONCHO/input/hydrography90m/accumulation.tif -co COMPRESS=DEFLATE -co ZLEVEL=9 -msknodata -2147483648 -nodata 255  -i $ONCHO/prediction_seed${seed}/prediction_seed${seed}R_all.tif -o $ONCHO/prediction_seed${seed}/prediction_seed${seed}R_all_msk.tif 
 
 cd $ONCHO/prediction_seed${seed}/
 rm -f gdaltindex $ONCHO/prediction_seed${seed}/all_tif_shp.*
@@ -359,11 +350,10 @@ gdaltindex $ONCHO/prediction_seed${seed}/all_tif_shp.shp  prediction_seed${seed}
 gdal_translate -tr 0.00833333333333 0.00833333333333 -r average -co COMPRESS=DEFLATE -co ZLEVEL=9 $ONCHO/prediction_seed${seed}/prediction_seed${seed}P_all.tif $ONCHO/prediction_seed${seed}/prediction_seed${seed}P_all_1km.tif
 
 pksetmask -m  ../input/geomorpho90m/slope.tif  -co COMPRESS=DEFLATE -co ZLEVEL=9   -msknodata -9999 -nodata  -9999 -i $ONCHO/prediction_seed${seed}/prediction_seed${seed}P_all_1km.tif -o   $ONCHO/prediction_seed${seed}/prediction_seed${seed}P_all_1km_msk.tif
-# gdal_translate -co COMPRESS=DEFLATE -co ZLEVEL=9 -scale 0.344 0.966 0.01 1 $ONCHO/prediction_seed${seed}/prediction_seed${seed}_all_1km_msk.tif $ONCHO/prediction_seed${seed}/prediction_seed${seed}_all_1km_msk_s.tif
 
-gdal_translate -tr 0.00833333333333 0.00833333333333 -r mode -co COMPRESS=DEFLATE -co ZLEVEL=9 $ONCHO/prediction_seed${seed}/prediction_seed${seed}R_all.tif $ONCHO/prediction_seed${seed}/prediction_seed${seed}R_all_1km.tif
-pksetmask -m  ../input/geomorpho90m/slope.tif  -co COMPRESS=DEFLATE -co ZLEVEL=9   -msknodata -9999 -nodata 255  -i $ONCHO/prediction_seed${seed}/prediction_seed${seed}R_all_1km.tif -o   $ONCHO/prediction_seed${seed}/prediction_seed${seed}R_all_1km_msk.tif
-# gdal_translate -co COMPRESS=DEFLATE -co ZLEVEL=9 -scale 0.344 0.966 0.01 1 $ONCHO/prediction_seed${seed}/prediction_seed${seed}_all_1km_msk.tif $ONCHO/prediction_seed${seed}/prediction_seed${seed}_all_1km_msk_s.tif
+gdal_translate  -ot Byte -tr 0.00833333333333 0.00833333333333 -r mode -co COMPRESS=DEFLATE -co ZLEVEL=9 $ONCHO/prediction_seed${seed}/prediction_seed${seed}R_all.tif $ONCHO/prediction_seed${seed}/prediction_seed${seed}R_all_1km.tif
+pksetmask -ot Byte  -m  ../input/geomorpho90m/slope.tif  -co COMPRESS=DEFLATE -co ZLEVEL=9   -msknodata -9999 -nodata 255  -i $ONCHO/prediction_seed${seed}/prediction_seed${seed}R_all_1km.tif -o   $ONCHO/prediction_seed${seed}/prediction_seed${seed}R_all_1km_msk.tif
+
 
 rm $ONCHO/prediction_seed${seed}/*.tif.aux.xml
 fi
