@@ -175,9 +175,9 @@ ER=/gpfs/gibbs/project/sbsc/ga254/dataproces/ONCHO/input/ecoregions
 
 # unzip Ecoregions2017.zip
 
-gdal_rasterize    -a_nodata 65535   -te  $(getCorners4Gwarp   $ER/../geomorpho90m/elevation.tif )  -l "Ecoregions2017"  -a "ECO_ID"   -tr 0.0083333333333333 0.0083333333333333  -co COMPRESS=DEFLATE -co ZLEVEL=9  $ER/Ecoregions2017.shp  $ER/Ecoregions2017.tif 
+gdal_rasterize    -a_nodata 65535 -ot UInt16   -te  $(getCorners4Gwarp   $ER/../geomorpho90m/elevation.tif )  -l "Ecoregions2017"  -a "ECO_ID"   -tr 0.00083333333333333 0.00083333333333333  -co COMPRESS=DEFLATE -co ZLEVEL=9  $ER/Ecoregions2017.shp  $ER/Ecoregions2017.tif 
 mv $ER/Ecoregions2017.tif     $ER/ER2017.tif
-gdal_edit.py -a_nodata 0     $ER/ER2017.tif
+gdal_edit.py -unsetnodata     $ER/ER2017.tif
  
 ##### landcover 
 ### wget https://lulctimeseries.blob.core.windows.net/lulctimeseriespublic/lc2021/lulc2021.zip
@@ -197,6 +197,22 @@ gdal_translate    -projwin $(getCorners4Gtranslate $LC/../geomorpho90m/elevation
 mv $LC/../../input/landcover/lc2021_wgs84_r.tif $LC/../../input/landcover/LC2021.tif 
 gdal_edit.py -a_nodata 255    $LC/../../input/landcover/LC2021.tif
 
+################## water occurence
+#### gdalbuildvrt  -srcnodata 255 -vrtnodata 100  -overwrite   occurrence.vrt  occurrence_download/occurrence-*-??????????.tif 
+WATER=/gpfs/gibbs/project/sbsc/ga254/dataproces/ONCHO/input/water 
+gdal_translate  -projwin $(getCorners4Gtranslate $WATER/../geomorpho90m/elevation.tif) -tr  0.00083333333333333333333333 0.00083333333333333333333333 -r average  -co COMPRESS=DEFLATE -co ZLEVEL=9   /gpfs/gibbs/pi/hydro/hydro/dataproces/GSW/input/occurrence.vrt   $WATER/occurence.tif  
+gdal_edit.py -unsetnodata $WATER/occurence.tif 
+
+gdal_proximity.py -co COMPRESS=DEFLATE -co ZLEVEL=9 -values 0 -distunits PIXEL -ot UInt32 $WATER/occurence.tif $WATER/occurence_proximity.tif
+
+############### FLOW
+WATER=/gpfs/gibbs/project/sbsc/ga254/dataproces/ONCHO/input/water
+
+gdal_translate  -projwin $(getCorners4Gtranslate $WATER/../geomorpho90m/elevation.tif)  -co COMPRESS=DEFLATE -co ZLEVEL=9 /gpfs/gibbs/pi/hydro/hydro/dataproces/FLOW1k/FLO1K_mean_averaged_1960-2015.tif $WATER/flow_1km.tif
+
+gdalwarp -overwrite  -te $(getCorners4Gwarp $WATER/../geomorpho90m/elevation.tif) -tr 0.00083333333333333333333333 0.00083333333333333333333333 -r max  -co COMPRESS=DEFLATE -co ZLEVEL=9 /gpfs/gibbs/pi/hydro/hydro/dataproces/FLOW1k/FLO1K_mean_averaged_1960-2015.tif $WATER/flow_mean.tif
+gdal_edit.py -unsetnodata $WATER/flow_mean.tif
+
 ##### lat long 
 export ONCHO=/gpfs/gibbs/project/sbsc/ga254/dataproces/ONCHO/
 
@@ -210,3 +226,20 @@ grass /tmp/mylocation/PERMANENT --exec r.out.gdal -f --o -c -m createopt="COMPRE
 grass /tmp/mylocation/PERMANENT --exec r.out.gdal -f --o -c -m createopt="COMPRESS=DEFLATE,ZLEVEL=9" type=Float32 format=GTiff nodata=0 input=latiy output=$ONCHO/input/latlon/y.tif
 EOF
 
+
+
+###### road map https://download.geofabrik.de/africa/nigeria.html 
+
+
+OSM=/gpfs/gibbs/project/sbsc/ga254/dataproces/ONCHO/input/openstreetmap/
+
+gdal_rasterize  -a_nodata 0 -ot Byte   -te  $(getCorners4Gwarp $OSM/../geomorpho90m/elevation.tif )  -l "gis_osm_roads_free_1"  -burn 1    -tr 0.00083333333333333 0.00083333333333333  -co COMPRESS=DEFLATE -co ZLEVEL=9  $OSM/gis_osm_roads_free_1.shp  $OSM/gis_osm_roads_free_1.tif
+gdal_edit.py -unsetnodata  $OSM/gis_osm_roads_free_1.tif
+
+gdal_proximity.py -fixed-buf-val 1  -maxdist 5 -nodata 0 -co COMPRESS=DEFLATE -co ZLEVEL=9 -values 0.5 -distunits PIXEL -ot Byte $OSM/gis_osm_roads_free_1.tif   $OSM/gis_osm_roads_free_1_tmp.tif
+gdal_edit.py -unsetnodata  $OSM/gis_osm_roads_free_1_tmp.tif
+
+### run in another termina... 
+source /gpfs/gibbs/project/sbsc/ga254/conda_envs/gdalcalc_env/lib/python3.10/venv/scripts/common/activate
+
+/gpfs/gibbs/project/sbsc/ga254/conda_envs/gdalcalc_env/bin/gdal_calc.py --overwrite  --NoDataValue=0  --co=COMPRESS=DEFLATE --co=ZLEVEL=9 --co=BIGTIFF=YES  -B $OSM/gis_osm_roads_free_1.tif -A $OSM/gis_osm_roads_free_1_tmp.tif  --outfile=$OSM/gis_osm_roads_free_1_buf.tif    --calc="(A + B )"

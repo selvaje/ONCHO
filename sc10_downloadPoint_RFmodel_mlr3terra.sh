@@ -35,13 +35,12 @@ echo prediction_${xmin}_${ymin}.tif
 
 echo $seed 
 
-if [ $SLURM_ARRAY_TASK_ID -eq 1  ] ; then
-
 rm -f $ONCHO/vector_seed$seed/data*.RData
 rm -f $ONCHO/vector_seed$seed/*.txt
 rm -f $ONCHO/prediction_seed$seed/prediction_*_*.tif
 rm -f $ONCHO/prediction_seed$seed/*.tif.aux.xml
 
+if [ $SLURM_ARRAY_TASK_ID -eq 1  ] ; then
 source ~/bin/gdal3
 source ~/bin/pktools
 
@@ -67,10 +66,7 @@ table = read.table("x_y_pa_predictors4R.txt", header = TRUE, sep = " ")
 table$ER2017 =   as.factor(table$ER2017)
 table$LC2021 =   as.factor(table$LC2021)
 table$pa =    as.factor(table$pa)
-
-tablexy = read.table("NigeriaHabitatSites_x_y_uniq_header.txt", header = TRUE, sep = " ")
-#table$x = tablexy$x
-#table$y = tablexy$y
+# a =     preProcess( table  ,   method = c("BoxCox") )    
 
 des.table = summary(table)
 
@@ -82,6 +78,7 @@ write.table(des.table, "stat_allVar.txt", quote = FALSE  )
 rf.vs =  varSelRF(table[-c(1,1)]  , table$pa , ntree = 500,  mtryFactor=11 ,    ntreeIterat = 500, vars.drop.frac = 0.1)
 table.rf.vs = subset(table, select = rf.vs$selected.vars)
 table.rf.vs$pa = table$pa 
+
 #####
 
 library("ranger")
@@ -133,22 +130,26 @@ library("stars")
 library("terra")
 library("future")
 library("blockCV")
-#########################                             30 for variable selection 
+######################### 
+
+tablexy = read.table("NigeriaHabitatSites_x_y_uniq_header.txt", header = TRUE, sep = " ")
+table.rf.vs$x = tablexy$x
+table.rf.vs$y = tablexy$y
 
 # # create task  for cross validation    https://mlr3book.mlr-org.com/special.html  
-# task = mlr3spatiotempcv::TaskClassifST$new(
-#   id = "identifier_table.rf.vr",
-#   backend = mlr3::as_data_backend(table.rf.vr), 
-#   target = "pa", 
-#   positive = "1",
-#   coordinate_names = c("x", "y"),
-#   coords_as_features = TRUE,
-#   crs = 4326
-#   )
-# print(task)
+task = mlr3spatiotempcv::TaskClassifST$new(
+   id = "identifier_table.rf.vs",
+   backend = mlr3::as_data_backend(table.rf.vs), 
+   target = "pa",
+   positive = "1",
+   coordinate_names = c("x", "y"),
+   coords_as_features = FALSE,
+   crs = 4326
+   )
+print(task)
 
-backend = as_data_backend(table.rf.vs)    # this is just table for the learner
-task = as_task_classif(backend, target = "pa" ,  positive = "1" )
+# backend = as_data_backend(table.rf.vs)    # this is just table for the learner  
+# task = as_task_classif(backend, target = "pa" ,  positive = "1" )
 
 ### https://mlr3extralearners.mlr-org.com/articles/learners/list_learners.html 
 learnerP = lrn("classif.ranger", predict_types = "prob" ,  predict_type = "prob" , importance = "permutation", properties = "twoclass" ) 
@@ -165,28 +166,32 @@ learnerR$model
 
 #### get  list of resamplint tecnique via  as.data.table(mlr_resamplings)
 #### https://rdrr.io/cran/mlr3spatiotempcv/man/mlr_resamplings_spcv_block.html
+#### https://geocompr.robinlovelace.net/spatial-cv.html
 
-# resampling_coords = mlr3::rsmp("repeated_spcv_coords", folds = 10, repeats = 10)
-# resampling_cv     = mlr3::rsmp("repeated_cv", folds = 10, repeats = 10)
+resampling_coords = mlr3::rsmp("repeated_spcv_coords", folds = 10, repeats = 10)
+resampling_cv     = mlr3::rsmp("repeated_cv", folds = 10, repeats = 10)
 
-# # https://mlr3spatiotempcv.mlr-org.com/articles/mlr3spatiotempcv.html
-# # reduce verbosity
-# lgr::get_logger("mlr3")$set_threshold("warn")
-# # run spatial cross-validation and save it to resample result rf  (rr_rfc)
+resampling_coords$instantiate(task)
+resampling_cv$instantiate(task)
 
-# rr_spcv_rfc_coords = mlr3::resample(task = task, learner = learnerR, resampling = resampling_coords)
-# rr_spcv_rfc_cv     = mlr3::resample(task = task, learner = learnerR, resampling = resampling_cv)
+# https://mlr3spatiotempcv.mlr-org.com/articles/mlr3spatiotempcv.html
+# reduce verbosity
+lgr::get_logger("mlr3")$set_threshold("warn")
+# run spatial cross-validation and save it to resample result rf  (rr_rfc)
 
-# # compute the classification accuracy  as a data.table  # https://mlr3.mlr-org.com/reference/mlr_measures.html#ref-examples 
-# score_spcv_rfc_coords = rr_spcv_rfc_coords$score(measure = mlr3::msr("classif.acc"))
-# score_spcv_rfc_cv     = rr_spcv_rfc_cv$score(measure = mlr3::msr("classif.acc"))
+rr_spcv_rfc_coords = mlr3::resample(task = task, learner = learnerR, resampling = resampling_coords , store_models = TRUE )
+rr_spcv_rfc_cv     = mlr3::resample(task = task, learner = learnerR, resampling = resampling_cv     , store_models = TRUE )
 
-# # keep only the columns you need
-# score_spcv_rfc         =  as.data.frame(score_spcv_rfc_coords$iteration)
-# score_spcv_rfc$coords  =  score_spcv_rfc_coords$classif.acc
-# score_spcv_rfc$cv      =  score_spcv_rfc_cv$classif.acc  #### the same of the OOB
+# compute the classification accuracy  as a data.table  # https://mlr3.mlr-org.com/reference/mlr_measures.html#ref-examples 
+score_spcv_rfc_coords = rr_spcv_rfc_coords$score(measure = mlr3::msr("classif.acc"))
+score_spcv_rfc_cv     = rr_spcv_rfc_cv$score(measure = mlr3::msr("classif.acc"))
 
-# write.table(score_spcv_rfc, paste0("../vector_seed",seed,"/cvR_selvsVar.txt"), quote = FALSE  )
+# keep only the columns you need
+score_spcv_rfc         =  as.data.frame(score_spcv_rfc_coords$iteration)
+score_spcv_rfc$coords  =  score_spcv_rfc_coords$classif.acc
+score_spcv_rfc$cv      =  score_spcv_rfc_cv$classif.acc  #### the same of the OOB
+
+write.table(score_spcv_rfc, paste0("../vector_seed",seed,"/cvR_selvsVar.txt"), quote = FALSE  )
 
 impP=as.data.frame(importance(learnerP$model))
 impR=as.data.frame(importance(learnerR$model))
@@ -209,7 +214,7 @@ write.table(capture.output(learnerP$model), paste0("../vector_seed",seed,"/selvs
 save.image(paste0("../vector_seed",seed,"/data1.RData"))
 '
 else 
-sleep 1000 
+sleep 1500 
 fi ### close the first array loop 
 
 module purge
@@ -257,9 +262,9 @@ print(learnerR)
 print ("start the prediction")
 # bb = st_bbox ( c(xmin = xmin , xmax =  xmax , ymin =  ymin, ymax =  ymax  )  , crs = 4326 ) 
 
-table.rf.vs = subset(table.rf.vs, select =  -c(pa)) ### remove pa 
+table.rf.vs = subset(table.rf.vs, select =  -c(pa , x , y )) ### remove pa x y 
 
-for (var in names( table.rf.vs) )  {
+for (var in  names( table.rf.vs) )  {
 print(var)
 raster  = terra::rast (Sys.glob(paste0("../input/*/",var,".tif")  ) )
 
@@ -326,7 +331,7 @@ save.image(paste0("../vector_seed",seed,"/data2_",xmin,"_",ymin,".RData"))
 rm -f  $ONCHO/prediction_seed${seed}/prediction_seed${seed}P_${xmin}_${ymin}.tif.aux.xml  $ONCHO/prediction_seed${seed}/prediction_seed${seed}R_${xmin}_${ymin}.tif.aux.xml
 
 if [ $SLURM_ARRAY_TASK_ID -eq 41  ] ; then
-sleep 1500
+sleep 2000
 module purge
 source ~/bin/gdal3
 source ~/bin/pktools
@@ -377,5 +382,16 @@ grep OOB   vector_seed*/selvrVarR.mod.rf.txt  | awk ' { sum = sum + $4 } END {pr
 #### 
 gdalbuildvrt  $ONCHO/prediction_all/prediction_all.vrt $ONCHO/prediction_*/prediction_seed*R_all_msk.tif 
 pksetmask -m  ../input/geomorpho90m/slope.tif  -co COMPRESS=DEFLATE -co ZLEVEL=9 
+
+
+# 
+### check if the R map  has been created 
+for seq  in $(seq 1 100) ; do ll  prediction_seed${seq}/prediction_seed${seq}R_all_1km_msk.tif 2>> /tmp/test.txt  ; done
+awk '{ gsub("seed", " " )  ; gsub("R_all", " " ) ;  printf ("%i " , $6)  }'  /tmp/test.txt
+
+#### 
+
+
+
 
 

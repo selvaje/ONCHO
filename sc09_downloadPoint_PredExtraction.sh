@@ -167,6 +167,16 @@ gdallocationinfo -geoloc -wgs84 -valonly $ONCHO/input/livestock/all_tif.vrt < $O
 echo "GHSpop_90m" > $ONCHO/vector/pred_pop.txt
 gdallocationinfo -geoloc -wgs84 -valonly $ONCHO/input/population/GHSpop_90m.tif  < $ONCHO/vector/NigeriaHabitatSites_x_y_uniq_noheader.txt  >> $ONCHO/vector/pred_pop.txt
 
+##### water 
+echo "occurence" > $ONCHO/vector/pred_occ.txt
+gdallocationinfo -geoloc -wgs84 -valonly $ONCHO/input/water/occurence.tif  < $ONCHO/vector/NigeriaHabitatSites_x_y_uniq_noheader.txt  >> $ONCHO/vector/pred_occ.txt
+
+echo "occurence_proximity" > $ONCHO/vector/pred_occ_prox.txt
+gdallocationinfo -geoloc -wgs84 -valonly $ONCHO/input/water/occurence.tif  < $ONCHO/vector/NigeriaHabitatSites_x_y_uniq_noheader.txt  >> $ONCHO/vector/pred_occ_prox.txt
+
+echo "flow_mean" > $ONCHO/vector/pred_flow.txt
+gdallocationinfo -geoloc -wgs84 -valonly $ONCHO/input/water/flow_mean.tif  < $ONCHO/vector/NigeriaHabitatSites_x_y_uniq_noheader.txt  >> $ONCHO/vector/pred_flow.txt 
+
 ####  landcover 
 
 echo "LC2021" > $ONCHO/vector/pred_landcover.txt
@@ -179,13 +189,15 @@ gdallocationinfo -geoloc -wgs84 -valonly $ONCHO/input/ecoregions/ERcase
 2017.tif   < $ONCHO/vector/NigeriaHabitatSites_x_y_uniq_noheader.txt  >> $ONCHO/vector/pred_ecoreg.txt
 
 # #### kernel  
-# for radius in 0.2 0.4 0.5 0.6 0.8 1 ; do 
-# echo "kernel1_R$radius" > $ONCHO/vector/pred_kernel1_R$radius.txt
-# gdallocationinfo -geoloc -wgs84 -valonly    $ONCHO/input/pa_kernel/kernel1_R$radius.tif   < $ONCHO/vector/NigeriaHabitatSites_x_y_uniq_noheader.txt  >> $ONCHO/vector/pred_kernel1_R$radius.txt
+for radius in 3 ; do 
+echo "kernel1_R$radius" > $ONCHO/vector/pred_kernel1_R$radius.txt
+gdallocationinfo -geoloc -wgs84 -valonly    $ONCHO/input/pa_kernel/kernel1_R$radius.tif   < $ONCHO/vector/NigeriaHabitatSites_x_y_uniq_noheader.txt  >> $ONCHO/vector/pred_kernel1_R$radius.txt
 
-# echo "kernel0_R$radius" > $ONCHO/vector/pred_kernel0_R$radius.txt
-# gdallocationinfo -geoloc -wgs84 -valonly    $ONCHO/input/pa_kernel/kernel0_R$radius.tif   < $ONCHO/vector/NigeriaHabitatSites_x_y_uniq_noheader.txt  >> $ONCHO/vector/pred_kernel0_R$radius.txt
-# done 
+echo "kernel0_R$radius" > $ONCHO/vector/pred_kernel0_R$radius.txt
+gdallocationinfo -geoloc -wgs84 -valonly    $ONCHO/input/pa_kernel/kernel0_R$radius.tif   < $ONCHO/vector/NigeriaHabitatSites_x_y_uniq_noheader.txt  >> $ONCHO/vector/pred_kernel0_R$radius.txt
+done 
+
+
 #### lat long  not ingested as predictor because already in the x y pa table 
 
 #### merging predictors 
