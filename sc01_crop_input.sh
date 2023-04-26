@@ -232,7 +232,7 @@ EOF
 
 
 OSM=/gpfs/gibbs/project/sbsc/ga254/dataproces/ONCHO/input/openstreetmap/
-
+cd /gpfs/gibbs/project/sbsc/ga254/dataproces/ONCHO/input/openstreetmap/
 gdal_rasterize  -a_nodata 0 -ot Byte   -te  $(getCorners4Gwarp $OSM/../geomorpho90m/elevation.tif )  -l "gis_osm_roads_free_1"  -burn 1    -tr 0.00083333333333333 0.00083333333333333  -co COMPRESS=DEFLATE -co ZLEVEL=9  $OSM/gis_osm_roads_free_1.shp  $OSM/gis_osm_roads_free_1.tif
 gdal_edit.py -unsetnodata  $OSM/gis_osm_roads_free_1.tif
 
@@ -243,3 +243,19 @@ gdal_edit.py -unsetnodata  $OSM/gis_osm_roads_free_1_tmp.tif
 source /gpfs/gibbs/project/sbsc/ga254/conda_envs/gdalcalc_env/lib/python3.10/venv/scripts/common/activate
 
 /gpfs/gibbs/project/sbsc/ga254/conda_envs/gdalcalc_env/bin/gdal_calc.py --overwrite  --NoDataValue=0  --co=COMPRESS=DEFLATE --co=ZLEVEL=9 --co=BIGTIFF=YES  -B $OSM/gis_osm_roads_free_1.tif -A $OSM/gis_osm_roads_free_1_tmp.tif  --outfile=$OSM/gis_osm_roads_free_1_buf.tif    --calc="(A + B )"
+
+
+### rasterize river network  OSM
+OSM=/gpfs/gibbs/project/sbsc/ga254/dataproces/ONCHO/input/openstreetmap
+gdal_rasterize  -a_nodata 0 -ot Byte   -te  $(getCorners4Gwarp $OSM/../geomorpho90m/elevation.tif ) -l "gis_osm_water_a_free_1"   -burn 1  -tr 0.00083333333333333 0.00083333333333333  -co COMPRESS=DEFLATE -co ZLEVEL=9  $OSM/gis_osm_water_a_free_1.shp  $OSM/gis_osm_water_a_free_1.tif
+
+gdal_rasterize  -a_nodata 0 -ot Byte   -te  $(getCorners4Gwarp $OSM/../geomorpho90m/elevation.tif ) -l "gis_osm_waterways_free_1" -burn 1  -tr 0.00083333333333333 0.00083333333333333  -co COMPRESS=DEFLATE -co ZLEVEL=9  $OSM/gis_osm_waterways_free_1.shp  $OSM/gis_osm_waterways_free_1.tif
+
+
+### rasterize river network  NGA 
+
+NGA=/gpfs/gibbs/project/sbsc/ga254/dataproces/ONCHO/input/nga/
+gdal_rasterize  -a_nodata 0 -ot Byte   -te  $(getCorners4Gwarp $NGA/../geomorpho90m/elevation.tif )  -l "NGA_rvrsl_1m_dcw"  -burn 1    -tr 0.00083333333333333 0.00083333333333333  -co COMPRESS=DEFLATE -co ZLEVEL=9  $NGA/NGA_rvrsl_1m_dcw.shp  $NGA/NGA_rvrsl_1m_dcw.tif 
+
+gdal_rasterize  -a_nodata 0 -ot Byte   -te  $(getCorners4Gwarp $NGA/../geomorpho90m/elevation.tif )  -l "NGA_rvrsl_1m_esri"  -burn 1    -tr 0.00083333333333333 0.00083333333333333  -co COMPRESS=DEFLATE -co ZLEVEL=9  $NGA/NGA_rvrsl_1m_esri.shp  $NGA/NGA_rvrsl_1m_esri.tif 
+
