@@ -189,7 +189,7 @@ gdallocationinfo -geoloc -wgs84 -valonly $ONCHO/input/ecoregions/ERcase
 2017.tif   < $ONCHO/vector/NigeriaHabitatSites_x_y_uniq_noheader.txt  >> $ONCHO/vector/pred_ecoreg.txt
 
 # #### kernel  
-for radius in 3 ; do 
+for radius in 1 ; do 
 echo "kernel1_R$radius" > $ONCHO/vector/pred_kernel1_R$radius.txt
 gdallocationinfo -geoloc -wgs84 -valonly    $ONCHO/input/pa_kernel/kernel1_R$radius.tif   < $ONCHO/vector/NigeriaHabitatSites_x_y_uniq_noheader.txt  >> $ONCHO/vector/pred_kernel1_R$radius.txt
 

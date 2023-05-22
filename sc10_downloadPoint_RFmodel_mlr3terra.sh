@@ -55,7 +55,7 @@ module --ignore_cache load R/4.1.0-foss-2020b
 
 # first RF for sorting the most important variables
 
-Rscript --vanilla  -e '
+Rscript --vanilla --verbose   -e '
 library("randomForest")
 library("varSelRF")
 
@@ -76,6 +76,7 @@ write.table(des.table, "stat_allVar.txt", quote = FALSE  )
 
 #### variable selection base on varSelRF 
 rf.vs =  varSelRF(table[-c(1,1)]  , table$pa , ntree = 500,  mtryFactor=11 ,    ntreeIterat = 500, vars.drop.frac = 0.1)
+rf.vs
 table.rf.vs = subset(table, select = rf.vs$selected.vars)
 table.rf.vs$pa = table$pa 
 
@@ -95,13 +96,13 @@ save.image(paste0("../vector_seed",seed,"/data0.RData"))
 impP.vs.s = impP.vs[order(impP.vs$"importance(mod.rfP.vs)",decreasing=TRUE), , drop = FALSE]
 impR.vs.s = impR.vs[order(impR.vs$"importance(mod.rfR.vs)",decreasing=TRUE), , drop = FALSE]
 
-write.table(impP.vs.s, paste0("../vector_seed",seed,"/importanceP_selvsVar.txt"), quote = FALSE  )
+write.table(impP.vs.s, paste0("../vector_seed",seed,"/importanceP_selvsVar_seed",seed,".txt"), quote = FALSE  )
 s.mod.rfP = capture.output(mod.rfP.vs)
-write.table(s.mod.rfP, paste0("../vector_seed",seed,"/selvsVarP.mod.rf.txt"), quote = FALSE , row.names = FALSE )
+write.table(s.mod.rfP, paste0("../vector_seed",seed,"/selvsVarP.mod.rf_seed",seed,".txt"), quote = FALSE , row.names = FALSE )
 
-write.table(impR.vs.s, paste0("../vector_seed",seed,"/importanceR_selvsVar.txt"), quote = FALSE  )
+write.table(impR.vs.s, paste0("../vector_seed",seed,"/importanceR_selvsVar_seed",seed,".txt"), quote = FALSE  )
 s.mod.rfR = capture.output(mod.rfR.vs)
-write.table(s.mod.rfR, paste0("../vector_seed",seed,"/selvsVarR.mod.rf.txt"), quote = FALSE , row.names = FALSE )
+write.table(s.mod.rfR, paste0("../vector_seed",seed,"/selvsVarR.mod.rf_seed",seed,".txt"), quote = FALSE , row.names = FALSE )
 
 # fit a model with all variables
 mod.rfP.all = ranger( pa ~ . , table  , probability = TRUE   ,  classification=TRUE ,   importance="permutation")
@@ -114,22 +115,24 @@ save.image(paste0("../vector_seed",seed,"/data0.RData"))
 impP.all.s = impP.all[order(impP.all$"importance(mod.rfP.all)",decreasing=TRUE), , drop = FALSE]
 impR.all.s = impR.all[order(impR.all$"importance(mod.rfR.all)",decreasing=TRUE), , drop = FALSE]
 
-write.table(impP.all.s, paste0("../vector_seed",seed,"/importanceP_allVar.txt"), quote = FALSE  )
+write.table(impP.all.s, paste0("../vector_seed",seed,"/importanceP_allVar_seed",seed,".txt"), quote = FALSE  )
 s.mod.rfP.all = capture.output(mod.rfP.all)
-write.table(s.mod.rfP.all, paste0("../vector_seed",seed,"/allVarP.mod.rf.txt"), quote = FALSE , row.names = FALSE )
+write.table(s.mod.rfP.all, paste0("../vector_seed",seed,"/allVarP.mod.rf_seed",seed,".txt"), quote = FALSE , row.names = FALSE )
 
-write.table(impR.all.s, paste0("../vector_seed",seed,"/importanceR_allVar.txt"), quote = FALSE  )
+write.table(impR.all.s, paste0("../vector_seed",seed,"/importanceR_allVar_seed",seed,".txt"), quote = FALSE  )
 s.mod.rfR.all = capture.output(mod.rfR.all)
-write.table(s.mod.rfR.all, paste0("../vector_seed",seed,"/allVarR.mod.rf.txt"), quote = FALSE , row.names = FALSE )
+write.table(s.mod.rfR.all, paste0("../vector_seed",seed,"/allVarR.mod.rf_seed",seed,".txt"), quote = FALSE , row.names = FALSE )
 
 library(rlang)
 library(mlr3spatiotempcv)  # spatio-temporal resampling 
 library(mlr3tuning)        # hyperparameter tuning package
 library("mlr3learners")
+library("mlr3misc")
 library("stars")
 library("terra")
 library("future")
 library("blockCV")
+library("sf")
 ######################### 
 
 tablexy = read.table("NigeriaHabitatSites_x_y_uniq_header.txt", header = TRUE, sep = " ")
@@ -165,54 +168,81 @@ learnerR$train(task)
 learnerR$model
 
 #### get  list of resamplint tecnique via  as.data.table(mlr_resamplings)
-#### https://rdrr.io/cran/mlr3spatiotempcv/man/mlr_resamplings_spcv_block.html
 #### https://geocompr.robinlovelace.net/spatial-cv.html
+#### resampling methods ---------------------------------------------------------
+#### https://mlr-org.com/resamplings.html    https://mlr3spatiotempcv.mlr-org.com/articles/spatiotemp-viz.html 
+#### as.data.table(mlr_resamplings)
 
-resampling_coords = mlr3::rsmp("repeated_spcv_coords", folds = 10, repeats = 10)
-resampling_cv     = mlr3::rsmp("repeated_cv", folds = 10, repeats = 10)
+rsmp_repeated_cv             = mlr3::rsmp("repeated_cv", folds = 10, repeats = 10)
+rsmp_repeated_spcv_coords    = mlr3::rsmp("repeated_spcv_coords", folds = 10, repeats = 10)
+## rsmp_repeated_spcv_env       = mlr3::rsmp("repeated_spcv_env",  folds = 10, repeats = 10, features= "CHELSA_bio4_r" )
+## rsmp_repeated_spcv_disc      = mlr3::rsmp("repeated_spcv_disc", folds = 10, repeats = 10 ,  radius = 10L, buffer = 10L)
 
-resampling_coords$instantiate(task)
-resampling_cv$instantiate(task)
+save.image(paste0("../vector_seed",seed,"/data1.RData"))
+
+rsmp_repeated_cv$instantiate(task)
+rsmp_repeated_spcv_coords$instantiate(task)
+## rsmp_repeated_spcv_env$instantiate(task)
+## rsmp_repeated_spcv_disc$instantiate(task)
 
 # https://mlr3spatiotempcv.mlr-org.com/articles/mlr3spatiotempcv.html
-# reduce verbosity
-lgr::get_logger("mlr3")$set_threshold("warn")
+# reduce verbosity 
+## lgr::get_logger("mlr3")$set_threshold("warn")
 # run spatial cross-validation and save it to resample result rf  (rr_rfc)
 
-rr_spcv_rfc_coords = mlr3::resample(task = task, learner = learnerR, resampling = resampling_coords , store_models = TRUE )
-rr_spcv_rfc_cv     = mlr3::resample(task = task, learner = learnerR, resampling = resampling_cv     , store_models = TRUE )
+rr_repeated_cv             = mlr3::resample(task = task, learner = learnerP, resampling = rsmp_repeated_cv            , store_models = TRUE )
+rr_repeated_spcv_coords    = mlr3::resample(task = task, learner = learnerP, resampling = rsmp_repeated_spcv_coords   , store_models = TRUE )
+## rr_repeated_spcv_env    = mlr3::resample(task = task, learner = learnerR, resampling = rsmp_repeated_spcv_env      , store_models = TRUE )
+## rr_repeated_spcv_disc      = mlr3::resample(task = task, learner = learnerR, resampling = rsmp_repeated_spcv_disc     , store_models = TRUE )
+
 
 # compute the classification accuracy  as a data.table  # https://mlr3.mlr-org.com/reference/mlr_measures.html#ref-examples 
-score_spcv_rfc_coords = rr_spcv_rfc_coords$score(measure = mlr3::msr("classif.acc"))
-score_spcv_rfc_cv     = rr_spcv_rfc_cv$score(measure = mlr3::msr("classif.acc"))
+
+score_repeated_cv                      = rr_repeated_cv$score(measure = mlr3::msr("classif.acc"))
+score_repeated_spcv_coords    = rr_repeated_spcv_coords$score(measure = mlr3::msr("classif.acc"))
+## score_repeated_spcv_env       = rr_repeated_spcv_env$score(measure = mlr3::msr("classif.acc"))
+## score_repeated_spcv_disc        = rr_repeated_spcv_disc$score(measure = mlr3::msr("classif.acc"))
+
+save.image(paste0("../vector_seed",seed,"/data1.RData"))
 
 # keep only the columns you need
-score_spcv_rfc         =  as.data.frame(score_spcv_rfc_coords$iteration)
-score_spcv_rfc$coords  =  score_spcv_rfc_coords$classif.acc
-score_spcv_rfc$cv      =  score_spcv_rfc_cv$classif.acc  #### the same of the OOB
+score_spcv_rfc              =  as.data.frame(score_repeated_cv$iteration)
+score_spcv_rfc$cv           =      score_repeated_cv$classif.acc
+score_spcv_rfc$spcv_coords  =      score_repeated_spcv_coords$classif.acc 
+##  score_spcv_rfc$spcv_env     =  score_repeated_spcv_env$classif.acc 
+##  score_spcv_rfc$spcv_disc    =  score_repeated_spcv_disc$classif.acc 
 
-write.table(score_spcv_rfc, paste0("../vector_seed",seed,"/cvR_selvsVar.txt"), quote = FALSE  )
+write.table(score_spcv_rfc, paste0("../vector_seed",seed,"/cvP_selvsVar_seed",seed,".txt"), quote = FALSE , row.names = FALSE )
+save.image(paste0("../vector_seed",seed,"/data1.RData"))
+q()
+'
 
+Rscript --vanilla --verbose   -e '
+library(ranger)
+seed <- as.numeric(Sys.getenv("seed"))
+load(paste0("../vector_seed",seed,"/data1.RData"))
 impP=as.data.frame(importance(learnerP$model))
 impR=as.data.frame(importance(learnerR$model))
 
 impP.s = impP[order(impP$"importance(learnerP$model)",decreasing=TRUE), , drop = FALSE]
 impR.s = impR[order(impR$"importance(learnerR$model)",decreasing=TRUE), , drop = FALSE]
 
-write.table(impP.s, paste0("../vector_seed",seed,"/importanceP_selvsVar.txt"), quote = FALSE  )
-write.table(impR.s, paste0("../vector_seed",seed,"/importanceR_selvsVar.txt"), quote = FALSE  )
+write.table(impP.s, paste0("../vector_seed",seed,"/importanceP_selvsVar_seed",seed,".txt"), quote = FALSE  )
+write.table(impR.s, paste0("../vector_seed",seed,"/importanceR_selvsVar_seed",seed,".txt"), quote = FALSE  )
 
 conf.matrix = learnerR$model$confusion.matrix
 pred.error =  learnerR$model$prediction.error 
 
-write.table(pred.error , paste0("../vector_seed",seed,"/pred_error.txt"))
-write.table(conf.matrix, paste0("../vector_seed",seed,"/conf_matrix.txt"))
+write.table(pred.error , paste0("../vector_seed",seed,"/pred_error_seed",seed,".txt"))
+write.table(conf.matrix, paste0("../vector_seed",seed,"/conf_matrix_seed",seed,".txt"))
 
-write.table(capture.output(learnerR$model), paste0("../vector_seed",seed,"/selvsVarR.mod.rf.txt"), quote = FALSE , row.names = FALSE )
-write.table(capture.output(learnerP$model), paste0("../vector_seed",seed,"/selvsVarP.mod.rf.txt"), quote = FALSE , row.names = FALSE )
+write.table(capture.output(learnerR$model), paste0("../vector_seed",seed,"/selvsVarR.mod.rf_seed",seed,".txt"), quote = FALSE , row.names = FALSE )
+write.table(capture.output(learnerP$model), paste0("../vector_seed",seed,"/selvsVarP.mod.rf_seed",seed,".txt", quote = FALSE , row.names = FALSE )
 
 save.image(paste0("../vector_seed",seed,"/data1.RData"))
+q()
 '
+
 else 
 sleep 1500 
 fi ### close the first array loop 
@@ -328,6 +358,7 @@ terra::writeRaster (env_predR, paste0("/gpfs/gibbs/project/sbsc/ga254/dataproces
 save.image(paste0("../vector_seed",seed,"/data2_",xmin,"_",ymin,".RData"))
 
 '
+
 rm -f  $ONCHO/prediction_seed${seed}/prediction_seed${seed}P_${xmin}_${ymin}.tif.aux.xml  $ONCHO/prediction_seed${seed}/prediction_seed${seed}R_${xmin}_${ymin}.tif.aux.xml
 
 if [ $SLURM_ARRAY_TASK_ID -eq 41  ] ; then
