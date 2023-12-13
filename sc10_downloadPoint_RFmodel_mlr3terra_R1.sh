@@ -4,36 +4,41 @@ options(echo=T)
 library("randomForest")
 library("varSelRF")
 
-seed <- as.numeric(Sys.getenv("seed"))
-set.seed(1)
+# seed <- as.numeric(Sys.getenv("seed"))
+# set.seed(1)
+
+args <- commandArgs()
+print(args)
+seed <- args[7]
+print(seed)
 
 table = read.table("x_y_pa_predictors4R.txt", header = TRUE, sep = " ")
 table$ER2017 =   as.factor(table$ER2017)
 table$LC2021 =   as.factor(table$LC2021)
 table$pa =    as.factor(table$pa)
 
-des.table = summary(table)
-write.table(des.table, "stat_allVar.txt", quote = FALSE  )
+# des.table = summary(table)
+# write.table(des.table, "stat_allVar.txt", quote = FALSE  )
 
-# # nomralization 
+# nomralization in not making any improvement  
+
 # library("broman")
 # table_norm = as.data.frame(normalize(table[-c(1,1)]))
 # var_names = names(table[-c(1,1)])
 # names(table_norm) <- var_names
 # table_norm = cbind(table[c(1)] , table_norm )
 
-# table_norm$ER2017 =   table$ER2017
-# table_norm$LC2021 =   table$LC2021
-# table_norm$pa =       table$pa
-# table = table_norm 
-
+# table_norm$ER2017 =   as.factor(table$ER2017)
+# table_norm$LC2021 =   as.factor(table$LC2021)
+# table_norm$pa     =   as.factor(table$pa)
+# table = table_norm
 
 # t <- tuneRF(table[,-1], table[,1],  stepFactor = 1,  plot = TRUE, ntreeTry = 500, trace = TRUE,  improve = 0.01)  
 
 print("variable selection base on varSelRF") 
 rf.vs = varSelRF(table[-c(1,1)]  , table$pa , ntree = 500,  mtryFactor=11 , ntreeIterat = 500, vars.drop.frac = 0.1)
 rf.vs
-xc
+
 table.rf.vs = subset(table, select = rf.vs$selected.vars)
 table.rf.vs$pa = table$pa 
 
@@ -173,4 +178,21 @@ score_spcv_rfc$spcv_coords  =      score_repeated_spcv_coords$classif.acc
 
 write.table(score_spcv_rfc, paste0("../vector_seed",seed,"/cvP_selvsVar_seed",seed,".txt"), quote = FALSE , row.names = FALSE )
 save.image(paste0("../vector_seed",seed,"/data1.RData"))
+
+impP=as.data.frame(importance(learnerP$model))
+impR=as.data.frame(importance(learnerR$model))
+impP.s = impP[order(impP$"importance(learnerP$model)",decreasing=TRUE), , drop = FALSE]
+impR.s = impR[order(impR$"importance(learnerR$model)",decreasing=TRUE), , drop = FALSE]   
+write.table(impP.s, paste0("../vector_seed",seed,"/importanceP_selvsVar_seed",seed,".txt"), quote = FALSE  )
+write.table(impR.s, paste0("../vector_seed",seed,"/importanceR_selvsVar_seed",seed,".txt"), quote = FALSE  )
+
+conf.matrix = learnerR$model$confusion.matrix       
+pred.error =  learnerR$model$prediction.error   
+
+write.table(pred.error , paste0("../vector_seed",seed,"/pred_error_seed",seed,".txt"))
+write.table(conf.matrix, paste0("../vector_seed",seed,"/conf_matrix_seed",seed,".txt"))
+write.table(capture.output(learnerR$model), paste0("../vector_seed",seed,"/selvsVarR.mod.rf_seed",seed,".txt"), quote = FALSE , row.names = FALSE )
+write.table(capture.output(learnerP$model), paste0("../vector_seed",seed,"/selvsVarP.mod.rf_seed",seed,".txt"), quote = FALSE , row.names = FALSE )
+save.image(paste0("../vector_seed",seed,"/data1.RData"))
+
 q()
