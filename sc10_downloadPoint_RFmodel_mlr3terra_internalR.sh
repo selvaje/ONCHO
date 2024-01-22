@@ -72,7 +72,7 @@ library("varSelRF")
 seed <- as.numeric(Sys.getenv("seed"))
 set.seed(1)
 
-table = read.table("x_y_pa_predictors4R.txt", header = TRUE, sep = " ")
+table = read.table("x_y_pa_predictors4R_flypresent.txt", header = TRUE, sep = " ")
 table$ER2017 =   as.factor(table$ER2017)
 table$LC2021 =   as.factor(table$LC2021)
 table$pa =    as.factor(table$pa)

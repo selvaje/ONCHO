@@ -185,8 +185,7 @@ gdallocationinfo -geoloc -wgs84 -valonly $ONCHO/input/landcover/LC2021.tif  < $O
 ##### ecorigion 
 
 echo "ER2017" > $ONCHO/vector/pred_ecoreg.txt
-gdallocationinfo -geoloc -wgs84 -valonly $ONCHO/input/ecoregions/ERcase 
-2017.tif   < $ONCHO/vector/NigeriaHabitatSites_x_y_uniq_noheader.txt  >> $ONCHO/vector/pred_ecoreg.txt
+gdallocationinfo -geoloc -wgs84 -valonly $ONCHO/input/ecoregions/ER2017.tif   < $ONCHO/vector/NigeriaHabitatSites_x_y_uniq_noheader.txt  >> $ONCHO/vector/pred_ecoreg.txt
 
 # #### kernel  
 for radius in 1 ; do 

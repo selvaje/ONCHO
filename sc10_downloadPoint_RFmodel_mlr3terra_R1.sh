@@ -1,4 +1,3 @@
-
 options(echo=T)
 
 library("randomForest")
@@ -12,8 +11,8 @@ print(args)
 seed <- args[7]
 print(seed)
 
-table = read.table("x_y_pa_predictors4R.txt", header = TRUE, sep = " ")
-table$ER2017 =   as.factor(table$ER2017)
+table = read.table("x_y_pa_predictors4R_larvaepresent.txt", header = TRUE, sep = " ")
+# table$ER2017 =   as.factor(table$ER2017)
 table$LC2021 =   as.factor(table$LC2021)
 table$pa =    as.factor(table$pa)
 
@@ -99,7 +98,7 @@ library("blockCV")
 library("sf")
 ######################### 
 
-tablexy = read.table("NigeriaHabitatSites_x_y_uniq_header.txt", header = TRUE, sep = " ")
+tablexy = read.table("abridged_consolidated_x_y_uniq_header_larvaepresent.txt", header = TRUE, sep = " ")
 table.rf.vs$x = tablexy$x
 table.rf.vs$y = tablexy$y
 

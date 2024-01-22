@@ -16,12 +16,12 @@ source ~/bin/pktools
 GDAL_CACHEMAX=30000
 
 cd $ONCHO/
-# gdalbuildvrt  -separate -overwrite -b 1 $ONCHO/prediction_all/prediction_seedP_all_msk.vrt $ONCHO/prediction_seed?/prediction_seed*P_all_msk.tif $ONCHO/prediction_seed??/prediction_seed*P_all_msk.tif    $ONCHO/prediction_seed???/prediction_seed*P_all_msk.tif   
+gdalbuildvrt  -separate -overwrite -b 1 $ONCHO/prediction_all/prediction_seedP_all_msk.vrt $ONCHO/prediction_seed?/prediction_seed*P_all_msk.tif $ONCHO/prediction_seed??/prediction_seed*P_all_msk.tif    $ONCHO/prediction_seed???/prediction_seed*P_all_msk.tif   
 
-# pkstatprofile -co COMPRESS=LZW -co ZLEVEL=9 -nodata -9999 -f mean -f stdev -i $ONCHO/prediction_all/prediction_seedP_all_msk.vrt -o $ONCHO/prediction_all/prediction_seedP_all_msk_tmp.tif
+pkstatprofile -co COMPRESS=LZW -co ZLEVEL=9 -nodata -9999 -f mean -f stdev -i $ONCHO/prediction_all/prediction_seedP_all_msk.vrt -o $ONCHO/prediction_all/prediction_seedP_all_msk_tmp.tif
 
-# gdal_translate -b 1 -co COMPRESS=LZW -co ZLEVEL=9 $ONCHO/prediction_all/prediction_seedP_all_msk_tmp.tif $ONCHO/prediction_all/prediction_seedP_all_msk_mean.tif  
-# gdal_translate -b 2 -co COMPRESS=LZW -co ZLEVEL=9 $ONCHO/prediction_all/prediction_seedP_all_msk_tmp.tif $ONCHO/prediction_all/prediction_seedP_all_msk_stdev.tif
+gdal_translate -b 1 -co COMPRESS=LZW -co ZLEVEL=9 $ONCHO/prediction_all/prediction_seedP_all_msk_tmp.tif $ONCHO/prediction_all/prediction_seedP_all_msk_mean.tif  
+gdal_translate -b 2 -co COMPRESS=LZW -co ZLEVEL=9 $ONCHO/prediction_all/prediction_seedP_all_msk_tmp.tif $ONCHO/prediction_all/prediction_seedP_all_msk_stdev.tif
 
 
 gdal_translate -tr 0.0083333333333333 0.0083333333333333 -r average  -co COMPRESS=LZW -co ZLEVEL=9  $ONCHO/prediction_all/prediction_seedP_all_msk_mean.tif   $ONCHO/prediction_all/prediction_seedP_all_msk_mean_1km.tif

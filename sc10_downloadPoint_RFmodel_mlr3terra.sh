@@ -221,7 +221,7 @@ exit
 for seq  in $(seq 1 100) ; do echo $seq $( pkstat --hist -i prediction_seed${seq}/prediction_seed${seq}R_all_1km_msk.tif   | grep -v " 0" | grep -v "255 " ) ; done  | grep -e nan -e FileOpenError  | awk '{printf ("%i " , $1) }'
 
 # check if all the tiles have been done correctly 
-for seq  in $(seq 1 100) ; do echo $seq $( pkstat --hist -i prediction_seed${seq}/prediction_seed${seq}R_all_1km_msk.tif   | grep -v " 0" | grep -e "255 " ) ; done | grep -v 134625
+for seq  in $(seq 1 100) ; do echo $seq $( pkstat --hist -i prediction_seed${seq}/prediction_seed${seq}R_all_1km_msk.tif   | grep -v " 0" | grep -e "255 " ) ; done | grep -v 134625  | awk '{printf ("%i " , $1) }'
 
 for seq  in prediction_seed??/prediction_seed8R_all_1km_msk.tif  ; do echo $seq $( pkstat --hist -i $file  | grep -v " 0" | grep -e "255 " ) ; done | grep -v 134625
 
