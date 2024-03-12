@@ -19,9 +19,9 @@ tr '\r' '\n' < $ONCHO/vector/abridged_consolidated_file.csv  | awk '!/^[[:space:
 
 echo "x y pa" > $ONCHO/vector/abridged_consolidated_x_y_pa_$STATUS.txt
 
-STATUS=larvaepresent  ##### change the columns number   larvaepresent=$20 adultpresent=21 flypresent=22
+STATUS=adultpresent  ##### change the columns number   larvaepresent=$20 adultpresent=21 flypresent=22
 
-awk -F "," '{ if (NR>1) { print $8 , $7 , $20 }}' $ONCHO/vector/abridged_consolidated_file_unix.csv | awk '{ if (NF==3) print }' >> $ONCHO/vector/abridged_consolidated_x_y_pa_$STATUS.txt
+awk -F "," '{ if (NR>1) { print $8 , $7 , $21 }}' $ONCHO/vector/abridged_consolidated_file_unix.csv | awk '{ if (NF==3) print }' >> $ONCHO/vector/abridged_consolidated_x_y_pa_$STATUS.txt
 awk  '{ if (NR>1) print $1 , $2 }'       $ONCHO/vector/abridged_consolidated_x_y_pa_$STATUS.txt   >  $ONCHO/vector/abridged_consolidated_x_y_$STATUS.txt
 awk  '{ if (NR>1) print $1 , $2 , $3 }'  $ONCHO/vector/abridged_consolidated_x_y_pa_$STATUS.txt   >  $ONCHO/vector/abridged_consolidated_x_y_pa_noheader_$STATUS.txt
 

@@ -229,6 +229,8 @@ grep OOB   vector_seed*/allVarR.mod.rf.txt    | awk ' { sum = sum + $4 } END {pr
 grep OOB   vector_seed*/selvsVarR.mod.rf_seed*.txt  | awk ' { sum = sum + $4 } END {print sum / 100}' 
 grep OOB   vector_seed*/selvsVarP.mod.rf_seed*.txt  | awk ' { sum = sum + $6 } END {print sum / 100}' 
 
+grep OOB   vector_seed*/selvsVarR.mod.rf_seed*.txt  |  awk '{s+=$4; ss+=$4^2} END{print m=s/NR, sqrt(ss/NR-m^2)}'
+grep OOB   vector_seed*/selvsVarP.mod.rf_seed*.txt  |  awk '{s+=$6; ss+=$6^2} END{print m=s/NR, sqrt(ss/NR-m^2)}'  
 
 #### 
 gdalbuildvrt  $ONCHO/prediction_all/prediction_all.vrt $ONCHO/prediction_*/prediction_seed*R_all_msk.tif 
@@ -248,3 +250,17 @@ awk '{ gsub("seed", " " )  ; gsub("R_all", " " ) ;  printf ("%i " , $6)  }'  /tm
 exit
 
 install.packeges("randomForest" , "varSelRF" ,"broman" , "ranger" , "rlang" , "mlr3" , "mlr3spatiotempcv"  , "mlr3tuning" , "mlr3learners" ,  "mlr3misc" , "stars", "terra", "future", "blockCV", "sf","mlr3spatial" ,  "stars")
+
+
+
+######  results statistic
+
+awk '{s+=$2; ss+=$2^2} END{print m=s/NR, sqrt(ss/NR-m^2)}'    vector_flyprsent/cvP_selvsVar_seed*_flyprsent.txt  #### average and standard deviation    CV
+awk '{s+=$3; ss+=$3^2} END{print m=s/NR, sqrt(ss/NR-m^2)}'    vector_flyprsent/cvP_selvsVar_seed*_flyprsent.txt  #### average and standard deviation  spatial CV
+
+awk '{s+=$2; ss+=$2^2} END{print m=s/NR, sqrt(ss/NR-m^2)}'    vector_seed*/cvP_selvsVar_seed*.txt  #### average and standard deviation    CV                                   
+awk '{s+=$3; ss+=$3^2} END{print m=s/NR, sqrt(ss/NR-m^2)}'    vector_seed*/cvP_selvsVar_seed*.txt  #### average and standard deviation  spatial CV                              
+
+
+
+grep Brier vector_flyprsent/allVarP.mod.rf_seed*_flyprsent.txt | awk '{s+=$6; ss+=$6^2} END{print m=s/NR, sqrt(ss/NR-m^2)}'
