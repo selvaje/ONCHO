@@ -15,6 +15,9 @@
 #  y 4 15                                                                                                              remove the first row that includes only see area
 # for x in $(seq 2 2 14) ; do for y in $(seq 4 2 14 ) ; do echo $x $(expr $x + 2 ) $y $(expr $y + 2 ) ; done ; done  | awk '{ if (NR>1) print  }'  >   $ONCHO/vector/tile_list.txt  
 
+#### this script train the RF model when compute the first tile and then make the prediction in all the tiles.
+#### for the 1km resolution the training and the prediction can be combined. There is no need to make the prediction tile by tile.
+
 module load StdEnv
 
 echo "seed = $seed "
@@ -59,7 +62,10 @@ module load R/4.3.0-foss-2022b
 # first RF for sorting the most important variables
 ### Rscript --vanilla --verbose   -e '
 
+## the sc10_downloadPoint_RFmodel_mlr3terra_R1.sh make the variable selection and the RF training.
 Rscript --vanilla --verbose /vast/palmer/home.grace/ga254/scripts_gitreps/ONCHO/sc10_downloadPoint_RFmodel_mlr3terra_R1.sh $seed 
+
+#### the results of the RF training is saved to data1.RData and then is load again. 
 
 else 
 sleep 1500
@@ -112,6 +118,7 @@ print(learnerR)
 print ("start the prediction")
 # bb = st_bbox ( c(xmin = xmin , xmax =  xmax , ymin =  ymin, ymax =  ymax  )  , crs = 4326 ) 
 
+# load the table with the selected variables and use the header to load the tif
 table.rf.vs = subset(table.rf.vs, select =  -c(pa , x , y )) ### remove pa x y 
 
 for (var in  names( table.rf.vs) )  {
@@ -133,11 +140,14 @@ print(var)
 stack =  c(stack,get(var))
 }
 
+# this point the stack raster is loaded but only as hyperlink - not in memory yet
+
 print ( c(xmin, xmax  , ymin , ymax) )
 
 # summary(stack)
 
-extent  <- terra::ext( xmin , xmax , ymin , ymax )
+# this make a crop of the stack and load in to the memory
+extent  <- terra::ext( xmin , xmax , ymin , ymax ) 
 extent
 env=terra::crop(stack,extent)
 
@@ -154,15 +164,18 @@ gc() ;  gc() ;
 print ("create the table")
                       
 save.image(paste0("../vector_seed",seed,"/data2_",xmin,"_",ymin,".RData"))
+# make the prediction probability  for each tile
 env_predP = terra::predict(env,  model =  learnerP,   predict_type = "prob" ,  fun = predict )
 
+# save to external file 
 terra::writeRaster (env_predP, paste0("/gpfs/gibbs/project/sbsc/ga254/dataproces/ONCHO/prediction_seed",seed,"/prediction_seed",seed,"P_",xmin,"_",ymin,".tif"), gdal=c("COMPRESS=DEFLATE","ZLEVEL=9"), overwrite=TRUE , datatype="Float32" , NAflag=-9999)
 
+# make the response probability  for each tile
 env_predR = terra::predict(env , model = learnerR,   predict_type = "response" , fun = predict )
 
 terra::writeRaster (env_predR, paste0("/gpfs/gibbs/project/sbsc/ga254/dataproces/ONCHO/prediction_seed",seed,"/prediction_seed",seed,"R_",xmin,"_",ymin,".tif"), gdal=c("COMPRESS=DEFLATE","ZLEVEL=9"), overwrite=TRUE , datatype="Byte" , NAflag=255)
 
-# predict on table 
+# predict on table. This is done only for checking
 # newdata = as.data.frame(as.matrix(env))
 # colSums(is.na(newdata))  # 0 NAs
 # but assuming there were 0s results in a more generic approach
@@ -180,6 +193,8 @@ save.image(paste0("../vector_seed",seed,"/data2_",xmin,"_",ymin,".RData"))
 '
 
 rm -f  $ONCHO/prediction_seed${seed}/prediction_seed${seed}P_${xmin}_${ymin}.tif.aux.xml  $ONCHO/prediction_seed${seed}/prediction_seed${seed}R_${xmin}_${ymin}.tif.aux.xml
+
+#### the part below allow to mosaic the prediction tiles. No need anymore for 1km prediction. 
 
 if [ $SLURM_ARRAY_TASK_ID -eq 41  ] ; then
 sleep 2000
@@ -217,7 +232,7 @@ fi
 
 exit
 
-# for controlling 
+# all this part is  checking if all the tills have been process corretctly. No need anymore for the 1km prediction 
 for seq  in $(seq 1 100) ; do echo $seq $( pkstat --hist -i prediction_seed${seq}/prediction_seed${seq}R_all_1km_msk.tif   | grep -v " 0" | grep -v "255 " ) ; done  | grep -e nan -e FileOpenError  | awk '{printf ("%i " , $1) }'
 
 # check if all the tiles have been done correctly 
@@ -242,16 +257,8 @@ pksetmask -m  ../input/geomorpho90m/slope.tif  -co COMPRESS=DEFLATE -co ZLEVEL=9
 for seq  in $(seq 1 100) ; do ll  prediction_seed${seq}/prediction_seed${seq}R_all_1km_msk.tif 2>> /tmp/test.txt  ; done
 awk '{ gsub("seed", " " )  ; gsub("R_all", " " ) ;  printf ("%i " , $6)  }'  /tmp/test.txt
 
-#### 
-
-
-
-
-exit
 
 install.packeges("randomForest" , "varSelRF" ,"broman" , "ranger" , "rlang" , "mlr3" , "mlr3spatiotempcv"  , "mlr3tuning" , "mlr3learners" ,  "mlr3misc" , "stars", "terra", "future", "blockCV", "sf","mlr3spatial" ,  "stars")
-
-
 
 ######  results statistic
 
@@ -260,7 +267,5 @@ awk '{s+=$3; ss+=$3^2} END{print m=s/NR, sqrt(ss/NR-m^2)}'    vector_flyprsent/c
 
 awk '{s+=$2; ss+=$2^2} END{print m=s/NR, sqrt(ss/NR-m^2)}'    vector_seed*/cvP_selvsVar_seed*.txt  #### average and standard deviation    CV                                   
 awk '{s+=$3; ss+=$3^2} END{print m=s/NR, sqrt(ss/NR-m^2)}'    vector_seed*/cvP_selvsVar_seed*.txt  #### average and standard deviation  spatial CV                              
-
-
 
 grep Brier vector_flyprsent/allVarP.mod.rf_seed*_flyprsent.txt | awk '{s+=$6; ss+=$6^2} END{print m=s/NR, sqrt(ss/NR-m^2)}'

@@ -9,6 +9,8 @@
 
 ###### sbatch  /vast/palmer/home.grace/ga254/scripts_gitreps/ONCHO/sc09_downloadPoint_PredExtraction_clean.sh 
 
+####  it allows to extract environmental/physical information at point level using gdallocationinfo 
+
 export ONCHO=/gpfs/gibbs/project/sbsc/ga254/dataproces/ONCHO
 cd $ONCHO/vector
 
@@ -19,7 +21,7 @@ tr '\r' '\n' < $ONCHO/vector/abridged_consolidated_file.csv  | awk '!/^[[:space:
 
 echo "x y pa" > $ONCHO/vector/abridged_consolidated_x_y_pa_$STATUS.txt
 
-STATUS=adultpresent  ##### change the columns number   larvaepresent=$20 adultpresent=21 flypresent=22
+STATUS=adultpresent  ##### change the columns number   larvaepresent=$20 adultpresent=$21 flypresent=$22
 
 awk -F "," '{ if (NR>1) { print $8 , $7 , $21 }}' $ONCHO/vector/abridged_consolidated_file_unix.csv | awk '{ if (NF==3) print }' >> $ONCHO/vector/abridged_consolidated_x_y_pa_$STATUS.txt
 awk  '{ if (NR>1) print $1 , $2 }'       $ONCHO/vector/abridged_consolidated_x_y_pa_$STATUS.txt   >  $ONCHO/vector/abridged_consolidated_x_y_$STATUS.txt
@@ -28,6 +30,8 @@ awk  '{ if (NR>1) print $1 , $2 , $3 }'  $ONCHO/vector/abridged_consolidated_x_y
 rm -fr  $ONCHO/vector/abridged_consolidated_x_y_pa_$STATUS.gpkg
 pkascii2ogr   -n "PA"  -a_srs epsg:4326 -f GPKG  -i $ONCHO/vector/abridged_consolidated_x_y_pa_noheader_$STATUS.txt -o $ONCHO/vector/abridged_consolidated_x_y_pa_$STATUS.gpkg
 gdal_rasterize  -co COMPRESS=DEFLATE -co ZLEVEL=9  -ot Byte -a_nodata 255   -a "PA" -tr 0.000833333333333 0.000833333333333  -te 2 4 15 15  -a_srs EPSG:4326 $ONCHO/vector/abridged_consolidated_x_y_pa_$STATUS.gpkg  $ONCHO/vector/abridged_consolidated_x_y_pa_$STATUS.tif
+
+#### This section allows to create a raster ID layer. It is used to classify the points that fall in the same pixel. When the raster ID layer is created then canbe commented. 
 
 # echo "ncols        15600"                  >  $ONCHO/input/id/raster_ID.asc 
 # echo "nrows        13200"                  >> $ONCHO/input/id/raster_ID.asc 
@@ -44,6 +48,8 @@ gdal_rasterize  -co COMPRESS=DEFLATE -co ZLEVEL=9  -ot Byte -a_nodata 255   -a "
  
 # gdal_translate   -a_srs EPSG:4326 -co COMPRESS=DEFLATE -co ZLEVEL=9   $ONCHO/input/id/raster_ID.asc  $ONCHO/input/id/raster_ID.tif 
 # rm   $ONCHO/input/id/raster_ID.asc
+
+#### extract raster ID information and calculate the average of point info having the same ID. If the value is 0 then is absence, if the value is > 0 then is presence. 
 
 gdallocationinfo -geoloc -wgs84 -valonly  $ONCHO/input/id/raster_ID.tif  < $ONCHO/vector/abridged_consolidated_x_y_$STATUS.txt  > $ONCHO/vector/abridged_consolidated_x_y_ID_$STATUS.txt 
 paste -d " "  $ONCHO/vector/abridged_consolidated_x_y_pa_noheader_$STATUS.txt   $ONCHO/vector/abridged_consolidated_x_y_ID_$STATUS.txt | sort -k 4,4   > $ONCHO/vector/abridged_consolidated_x_y_pa_ID_$STATUS.txt 
@@ -66,11 +72,11 @@ echo "x y" >  $ONCHO/vector/abridged_consolidated_x_y_uniq_header_$STATUS.txt
 awk  '{ print $1 , $2}' $ONCHO/vector/abridged_consolidated_x_y_pa_uniq_noheader_$STATUS.txt  >>  $ONCHO/vector/abridged_consolidated_x_y_uniq_header_$STATUS.txt
 
 
-#### crate 0 proximit and 1 proximity
+#### crate unique point vector file 
 
 pkascii2ogr -n "PA" -a_srs epsg:4326 -f GPKG -i $ONCHO/vector/abridged_consolidated_x_y_pa_uniq_noheader_$STATUS.txt -o $ONCHO/vector/abridged_consolidated_x_y_pa_uniq_$STATUS.gpkg
  
-echo  start the predictors  extraction 
+echo  start the predictors  extraction  using gdallocationinfo
 
 rm -f $ONCHO/vector/pred_*.txt 
 
@@ -79,7 +85,7 @@ echo geomorpho90m hydrography90m
 for var in geomorpho90m hydrography90m ; do 
 
 gdalbuildvrt -separate  -overwrite $ONCHO/input/$var/all_tif.vrt $(ls $ONCHO/input/$var/*.tif | grep -v -e _acc -e _msk)
-BB=$(ls $ONCHO/input/$var/*.tif | grep -v -e _acc -e _msk  | wc -l )
+BB=$(ls $ONCHO/input/$var/*.tif | grep -v -e _acc -e _msk  | wc -l ) # count the numbers of tif that are stack in the vrt. This is usefull for transfer from vertical to orizontal the gdallocationinfo information
 
 for var1 in $( ls $ONCHO/input/$var/*.tif  | grep -v -e _acc -e _msk )  ; do echo -n $(basename  $var1 .tif)" " ; done > $ONCHO/vector/pred_${var}.txt
 echo "" >> $ONCHO/vector/pred_${var}.txt
@@ -137,7 +143,7 @@ echo "occurence" > $ONCHO/vector/pred_occ.txt
 gdallocationinfo -geoloc -wgs84 -valonly $ONCHO/input/water/occurence.tif  < $ONCHO/vector/abridged_consolidated_x_y_uniq_noheader_$STATUS.txt  >> $ONCHO/vector/pred_occ.txt
 
 echo "occurence_proximity" > $ONCHO/vector/pred_occ_prox.txt
-gdallocationinfo -geoloc -wgs84 -valonly $ONCHO/input/water/occurence.tif  < $ONCHO/vector/abridged_consolidated_x_y_uniq_noheader_$STATUS.txt  >> $ONCHO/vector/pred_occ_prox.txt
+gdallocationinfo -geoloc -wgs84 -valonly $ONCHO/input/water/occurence_proximity.tif  < $ONCHO/vector/abridged_consolidated_x_y_uniq_noheader_$STATUS.txt  >> $ONCHO/vector/pred_occ_prox.txt
 
 echo "flow_mean" > $ONCHO/vector/pred_flow.txt
 gdallocationinfo -geoloc -wgs84 -valonly $ONCHO/input/water/flow_mean.tif  < $ONCHO/vector/abridged_consolidated_x_y_uniq_noheader_$STATUS.txt  >> $ONCHO/vector/pred_flow.txt 
@@ -154,9 +160,6 @@ echo ecorigion
 # echo "ER2017" > $ONCHO/vector/pred_ecoreg.txt  
 # gdallocationinfo -geoloc -wgs84 -valonly $ONCHO/input/ecoregions/ER2017.tif   < $ONCHO/vector/abridged_consolidated_x_y_uniq_noheader_$STATUS.txt  >> $ONCHO/vector/pred_ecoreg.txt
 
-
-
-#### lat long  not ingested as predictor because already in the x y pa table 
 
 echo merging predictors 
 
