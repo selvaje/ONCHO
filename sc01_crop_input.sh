@@ -42,7 +42,12 @@ pkreclass -c -9999 -r 0 -co COMPRESS=DEFLATE -co ZLEVEL=9  -i   $ONCHO/input/geo
 mv $ONCHO/input/geomorpho90m/aspect_cosine_tmp.tif   $ONCHO/input/geomorpho90m/aspect_cosine.tif 
 
 pkreclass -c -9999 -r 0 -co COMPRESS=DEFLATE -co ZLEVEL=9  -i   $ONCHO/input/geomorpho90m/aspect_sine.tif  -o  $ONCHO/input/geomorpho90m/aspect_sine_tmp.tif 
-mv $ONCHO/input/geomorpho90m/aspect_sine_tmp.tif   $ONCHO/input/geomorpho90m/aspect_sine.tif 
+mv $ONCHO/input/geomorpho90m/aspect_sine_tmp.tif   $ONCHO/input/geomorpho90m/aspect_sine.tif
+
+### download elevation data from the MERIT DEM https://hydro.iis.u-tokyo.ac.jp/~yamadai/MERIT_DEM/
+### the tiles for nigeria are  n00e005_dem.tif n00e010_dem.tif n05e000_dem.tif n05e005_dem.tif   n05e010_dem.tif n10e000_dem.tif  n10e005_dem.tif   n10e010_dem.tif
+### download the corrispondent *.tar.gz
+
 gdal_translate -projwin 2 15 15 4  -co COMPRESS=DEFLATE -co ZLEVEL=9 /gpfs/gibbs/pi/hydro/hydro/dataproces/MERIT/input_tif/all_tif.vrt  $ONCHO/input/geomorpho90m/elevation.tif
 
 
